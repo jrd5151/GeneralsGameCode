@@ -69,6 +69,7 @@
 #include "GameClient/DisplayStringManager.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/GameWindowManager.h"
+#include "GameClient/HudLayout.h"
 #include "GameClient/GameText.h"
 #include "GameClient/GadgetPushButton.h"
 #include "GameClient/GadgetProgressBar.h"
@@ -3089,7 +3090,11 @@ void ControlBar::setLowControlBarConfig()
 	m_currentControlBarStage = CONTROL_BAR_STAGE_LOW;
 	ICoord2D pos;
 	pos.x = m_defaultControlBarPosition.x;
-	pos.y = TheDisplay->getHeight() - .1 * TheDisplay->getHeight();
+	// TheSuperHackers @feature Leave the same part of the bar showing as at 4:3 when the HUD is centered.
+	Coord2D hudScale;
+	ICoord2D hudOffset;
+	hud::getTransform( hud::getLayoutAnchor( "ControlBar.wnd" ), DEFAULT_DISPLAY_WIDTH, DEFAULT_DISPLAY_HEIGHT, &hudScale, &hudOffset );
+	pos.y = TheDisplay->getHeight() - .1 * DEFAULT_DISPLAY_HEIGHT * hudScale.y;
 	setFullViewportHeight();
 	m_contextParent[ CP_MASTER ]->winSetPosition(pos.x, pos.y);
 	m_contextParent[ CP_MASTER ]->winHide(FALSE);
@@ -3827,5 +3832,12 @@ void ControlBar::setFullViewportHeight()
 
 void ControlBar::setScaledViewportHeight()
 {
+	// TheSuperHackers @feature A centered control bar leaves the screen sides free, so the 3D view
+	// has to reach the bottom of the screen there.
+	if (hud::isControlBarNarrowerThanScreen())
+	{
+		setFullViewportHeight();
+		return;
+	}
 	TheTacticalView->setHeight(TheDisplay->getHeight() * TheGlobalData->m_viewportHeightScale);
 }

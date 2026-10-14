@@ -272,8 +272,11 @@ public:
 	void preloadAssets( TimeOfDay timeOfDay );									///< preload the assets
 
 private:
+	void setMultiplier( const ControlBarScheme *scheme );				///< scale and offset from the scheme's creation resolution to the screen
+
 	ControlBarScheme *m_currentScheme;													///< the current scheme that everythign uses
 	Coord2D m_multiplier;
+	ICoord2D m_anchorOffset;																		///< TheSuperHackers @feature where the centered HUD puts the scheme art, see HudLayout.h
 
 	typedef std::list< ControlBarScheme* > ControlBarSchemeList;			///< list of control bar schemes
 	ControlBarSchemeList m_schemeList;

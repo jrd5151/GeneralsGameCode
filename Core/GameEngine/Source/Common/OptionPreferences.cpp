@@ -906,6 +906,19 @@ Real OptionPreferences::getCameraHeightScale() const
 	return clamp(0.5f, scale, 2.0f);
 }
 
+Bool OptionPreferences::getCenteredHud() const
+{
+	OptionPreferences::const_iterator it = find("CenteredHud");
+	if (it == end())
+		return TRUE;
+
+	if (stricmp(it->second.str(), "no") == 0)
+	{
+		return FALSE;
+	}
+	return TRUE;
+}
+
 AsciiString OptionPreferences::getSelectedMod() const
 {
 	OptionPreferences::const_iterator it = find("Mod");

@@ -640,6 +640,8 @@ void GameEngine::init()
 #endif
 
 		TheMetaMap->generateMetaMap();
+		TheMetaMap->storeDefaults();
+		TheMetaMap->loadUserMap();
 		TheMetaMap->verifyMetaMap();
 
 

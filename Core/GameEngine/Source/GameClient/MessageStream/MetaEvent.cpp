@@ -31,6 +31,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
 #include "Common/GameUtility.h"
+#include "Common/GlobalData.h"
 #include "Common/INI.h"
 #include "Common/MessageStream.h"
 #include "Common/Player.h"
@@ -776,6 +777,8 @@ MetaMapRec *MetaMap::getMetaMapRec(GameMessage::Type t)
 	m->m_category = CATEGORY_MISC;
 	m->m_description.clear();
 	m->m_displayName.clear();
+	m->m_defaultKey = MK_NONE;
+	m->m_defaultModState = NONE;
 	m->m_next = m_metaMaps;
 	m_metaMaps = m;
 
@@ -1027,6 +1030,123 @@ void MetaMap::verifyMetaMap()
 			("hmm, expected only meta-msgs here"));
 	}
 #endif
+}
+
+//-------------------------------------------------------------------------------------------------
+static const char *findLookupListName(ConstLookupListRecArray lookupList, Int value)
+{
+	for (; lookupList->name; lookupList++)
+		if (lookupList->value == value)
+			return lookupList->name;
+	return nullptr;
+}
+
+//-------------------------------------------------------------------------------------------------
+MetaMapRec *MetaMap::findMetaMapRec(GameMessage::Type t)
+{
+	for (MetaMapRec *map = m_metaMaps; map; map = map->m_next)
+	{
+		if (map->m_meta == t)
+			return map;
+	}
+	return nullptr;
+}
+
+//-------------------------------------------------------------------------------------------------
+/*static*/ const char *MetaMap::getMetaTypeName(GameMessage::Type t)
+{
+	for (const LookupListRec* metaNames = GameMessageMetaTypeNames; metaNames->name; metaNames++)
+		if (metaNames->value == (Int)t)
+			return metaNames->name;
+	return nullptr;
+}
+
+//-------------------------------------------------------------------------------------------------
+/*static*/ GameMessage::Type MetaMap::getMetaTypeByName(const char *name)
+{
+	for (const LookupListRec* metaNames = GameMessageMetaTypeNames; metaNames->name; metaNames++)
+		if (stricmp(metaNames->name, name) == 0)
+			return (GameMessage::Type)metaNames->value;
+	return GameMessage::MSG_INVALID;
+}
+
+//-------------------------------------------------------------------------------------------------
+void MetaMap::storeDefaults()
+{
+	for (MetaMapRec *map = m_metaMaps; map; map = map->m_next)
+	{
+		map->m_defaultKey = map->m_key;
+		map->m_defaultModState = map->m_modState;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+void MetaMap::resetToDefaults()
+{
+	for (MetaMapRec *map = m_metaMaps; map; map = map->m_next)
+	{
+		map->m_key = map->m_defaultKey;
+		map->m_modState = map->m_defaultModState;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/*static*/ AsciiString MetaMap::getUserMapFilename()
+{
+	AsciiString filename = TheGlobalData->getPath_UserData();
+	filename.concat("CommandMap.ini");
+	return filename;
+}
+
+//-------------------------------------------------------------------------------------------------
+void MetaMap::loadUserMap()
+{
+	const AsciiString filename = getUserMapFilename();
+
+	FILE *fp = fopen(filename.str(), "r");
+	if (fp == nullptr)
+		return;
+	fclose(fp);
+
+	// The file only holds Key and Modifiers of commands the user changed, so it loads over the game's mapping.
+	try
+	{
+		INI ini;
+		ini.load(filename, INI_LOAD_OVERWRITE, nullptr);
+	}
+	catch (...)
+	{
+		DEBUG_LOG(("MetaMap::loadUserMap - Unable to read '%s', using the default hotkeys", filename.str()));
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool MetaMap::saveUserMap() const
+{
+	const AsciiString filename = getUserMapFilename();
+
+	FILE *fp = fopen(filename.str(), "w");
+	if (fp == nullptr)
+		return FALSE;
+
+	fprintf(fp, "; Hotkeys changed in Options > Keyboard. Only commands that differ from the defaults are listed.\n\n");
+
+	for (const MetaMapRec *map = m_metaMaps; map; map = map->m_next)
+	{
+		if (map->m_key == map->m_defaultKey && map->m_modState == map->m_defaultModState)
+			continue;
+
+		const char *metaName = getMetaTypeName(map->m_meta);
+		const char *keyName = findLookupListName(KeyNames, map->m_key);
+		const char *modName = findLookupListName(ModifierNames, map->m_modState);
+		if (metaName == nullptr || keyName == nullptr || modName == nullptr)
+			continue;
+
+		fprintf(fp, "CommandMap %s\n  Key = %s\n  Modifiers = %s\nEnd\n\n", metaName, keyName, modName);
+	}
+
+	fclose(fp);
+	return TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------

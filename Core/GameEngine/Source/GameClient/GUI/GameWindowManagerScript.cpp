@@ -70,6 +70,7 @@
 #include "GameClient/GadgetSlider.h"
 #include "GameClient/GameText.h"
 #include "GameClient/HeaderTemplate.h"
+#include "GameClient/HudLayout.h"
 
 
 
@@ -521,6 +522,25 @@ static Bool parseTooltip( const char *token, WinInstanceData *instData,
 
 }
 
+// The anchor of the layout that winCreateFromScript is loading right now.
+static hud::Anchor s_layoutAnchor = hud::Anchor_None;
+
+// Sets s_layoutAnchor for the layout being loaded, and puts the previous one back when done.
+class ScopedLayoutAnchor
+{
+public:
+	ScopedLayoutAnchor( const char *filename ) : m_previous( s_layoutAnchor )
+	{
+		s_layoutAnchor = hud::getLayoutAnchor( filename );
+	}
+	~ScopedLayoutAnchor()
+	{
+		s_layoutAnchor = m_previous;
+	}
+private:
+	hud::Anchor m_previous;
+};
+
 // parseScreenRect ============================================================
 /** Parse the screen rect entry which tells us the position and size
 	* of window.  Note we scale for the current resolution if needed
@@ -558,12 +578,14 @@ static Bool parseScreenRect( const char *token, char *buffer,
 	// shrink or expand the screen region by the ratio of the current
 	// resolution divided by the creation resolution
 	//
-	Real xScale = (Real)TheDisplay->getWidth() / (Real)createRes.x;
-	Real yScale = (Real)TheDisplay->getHeight() / (Real)createRes.y;
-	screenRegion.lo.x = (Int)((Real)screenRegion.lo.x * xScale);
-	screenRegion.lo.y = (Int)((Real)screenRegion.lo.y * yScale);
-	screenRegion.hi.x = (Int)((Real)screenRegion.hi.x * xScale);
-	screenRegion.hi.y = (Int)((Real)screenRegion.hi.y * yScale);
+	// TheSuperHackers @feature HUD layouts scale uniformly and are anchored instead, see HudLayout.h
+	Coord2D scale;
+	ICoord2D offset;
+	hud::getTransform( s_layoutAnchor, createRes.x, createRes.y, &scale, &offset );
+	screenRegion.lo.x = (Int)((Real)screenRegion.lo.x * scale.x) + offset.x;
+	screenRegion.lo.y = (Int)((Real)screenRegion.lo.y * scale.y) + offset.y;
+	screenRegion.hi.x = (Int)((Real)screenRegion.hi.x * scale.x) + offset.x;
+	screenRegion.hi.y = (Int)((Real)screenRegion.hi.y * scale.y) + offset.y;
 
 	//
 	// given the screen region upper left compute the upper left that we
@@ -2739,6 +2761,7 @@ GameWindow *GameWindowManager::winCreateFromScript( AsciiString filenameString,
   File *inFile;
 	WindowLayoutInfo scriptInfo;
 	AsciiString asciibuf;
+	ScopedLayoutAnchor layoutAnchor( filename );
 
 	// zero info struct
 	//memset( &scriptInfo, 0, sizeof( WindowLayoutInfo ) ); // it's a class - use a constructor

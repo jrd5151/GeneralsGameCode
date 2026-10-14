@@ -133,5 +133,6 @@ public:
 	Real getGameWindowTransitionSpeedMultiplier() const;
 
 	Real getCameraHeightScale() const;
+	Bool getCenteredHud() const; ///< TheSuperHackers @feature Keep the in-game HUD at 4:3 proportions, centered. Defaults to yes.
 	AsciiString getSelectedMod() const; ///< TheSuperHackers @feature The mod picked in the mod menu, relative to the user data folder. Empty for none.
 };

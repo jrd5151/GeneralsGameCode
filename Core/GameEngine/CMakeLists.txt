@@ -196,6 +196,7 @@ set(GAMEENGINE_SRC
     Include/GameClient/HeaderTemplate.h
     Include/GameClient/HintSpy.h
     Include/GameClient/HotKey.h
+    Include/GameClient/HudLayout.h
     Include/GameClient/Image.h
     Include/GameClient/IMEManager.h
 #    Include/GameClient/InGameUI.h
@@ -761,6 +762,7 @@ set(GAMEENGINE_SRC
     Source/GameClient/GUI/GameWindowGlobal.cpp
     Source/GameClient/GUI/GameWindowManager.cpp
     Source/GameClient/GUI/GameWindowManagerScript.cpp
+    Source/GameClient/GUI/HudLayout.cpp
     Source/GameClient/GUI/GameWindowTransitions.cpp
     Source/GameClient/GUI/GameWindowTransitionsStyles.cpp
     Source/GameClient/GUI/GUICallbacks/ControlBarCallback.cpp

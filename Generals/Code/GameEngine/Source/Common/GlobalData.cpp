@@ -960,6 +960,7 @@ GlobalData::GlobalData()
 	m_allowMoneyPerMinuteForPlayer = FALSE;
 
 	m_gameWindowTransitionSpeedMultiplier = 1.0f;
+	m_cameraHeightScale = 1.15f;
 
 	m_debugShowGraphicalFramerate = FALSE;
 
@@ -1221,6 +1222,7 @@ void GlobalData::parseGameDataDefinition( INI* ini )
 	TheWritableGlobalData->m_playerInfoListFontSize = optionPref.getPlayerInfoListFontSize();
 	TheWritableGlobalData->m_showMoneyPerMinute = optionPref.getShowMoneyPerMinute();
 	TheWritableGlobalData->m_gameWindowTransitionSpeedMultiplier = optionPref.getGameWindowTransitionSpeedMultiplier();
+	TheWritableGlobalData->m_cameraHeightScale = optionPref.getCameraHeightScale();
 
 	TheWritableGlobalData->m_antiAliasLevel = optionPref.getAntiAliasing();
 	TheWritableGlobalData->m_textureFilteringMode = optionPref.getTextureFilterMode();

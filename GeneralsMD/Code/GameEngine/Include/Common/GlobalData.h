@@ -193,8 +193,11 @@ public:
 #if PRESERVE_RETAIL_SCRIPTED_CAMERA
 	Real m_cameraHeight;
 #endif
+
+	 // TheSuperHackers @info Max and Min camera height for the original 4:3 view, these are then scaled for other aspect ratios.
 	Real m_maxCameraHeight;
 	Real m_minCameraHeight;
+
 	Real m_terrainHeightAtEdgeOfMap;
 	Real m_unitDamagedThresh;
 	Real m_unitReallyDamagedThresh;
@@ -432,6 +435,9 @@ public:
 
 	// TheSuperHackers @feature bobtista 28/06/2026 user-configurable speed multiplier for game window transitions
 	Real m_gameWindowTransitionSpeedMultiplier;
+
+	// user-configurable multiplier for the default, min and max camera height, applied on top of the aspect ratio scale
+	Real m_cameraHeightScale;
 
 	Real m_shakeSubtleIntensity;			///< Intensity for shaking a camera with SHAKE_SUBTLE
 	Real m_shakeNormalIntensity;			///< Intensity for shaking a camera with SHAKE_NORMAL

@@ -826,6 +826,16 @@ static void saveOptions()
 	}
 
 	//-------------------------------------------------------------------------------------------------
+	// Set Camera Height Scale
+	{
+		Real scale = pref->getCameraHeightScale();
+		AsciiString prefString;
+		prefString.format("%g", scale);
+		(*pref)["CameraHeightScale"] = prefString;
+		TheWritableGlobalData->m_cameraHeightScale = scale;
+	}
+
+	//-------------------------------------------------------------------------------------------------
 	// Set JPEG screenshot quality
 	{
 		Int quality = pref->getJpegQuality();
@@ -878,6 +888,13 @@ static void saveOptions()
 
 				TheInGameUI->recreateControlBar();
 				TheInGameUI->refreshCustomUiResources();
+
+				// TheSuperHackers @info Update the view so the shellmap looks correct when changing resolution
+				TheTacticalView->setDefaultView(
+					DEG_TO_RADF(TheGlobalData->m_cameraPitch),
+					DEG_TO_RADF(TheGlobalData->m_cameraYaw),
+					1.0f);
+				TheTacticalView->setZoomToDefault();
 			}
 		}
 	}

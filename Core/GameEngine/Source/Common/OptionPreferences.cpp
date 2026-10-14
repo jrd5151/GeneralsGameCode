@@ -895,3 +895,13 @@ Real OptionPreferences::getGameWindowTransitionSpeedMultiplier() const
 	Real speed = (Real) atof(it->second.str());
 	return clamp(1.0f, speed, 1000.0f);
 }
+
+Real OptionPreferences::getCameraHeightScale() const
+{
+	OptionPreferences::const_iterator it = find("CameraHeightScale");
+	if (it == end())
+		return TheGlobalData->m_cameraHeightScale;
+
+	Real scale = (Real) atof(it->second.str());
+	return clamp(0.5f, scale, 2.0f);
+}

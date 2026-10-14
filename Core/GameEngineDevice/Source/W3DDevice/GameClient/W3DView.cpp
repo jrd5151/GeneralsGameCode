@@ -2249,6 +2249,9 @@ void W3DView::setDefaultView(Real pitch, Real angle, Real maxHeight)
 			aspectRatioScale = currentAspectRatio / baseAspectRatio;
 	}
 
+	// The user can further scale the camera height with CameraHeightScale in Options.ini.
+	aspectRatioScale *= TheGlobalData->m_cameraHeightScale;
+
 	// MDC - we no longer want to rotate maps (design made all of them right to begin with)
 	//	m_defaultAngle = angle * M_PI/180.0f;
 	setDefaultPitch(pitch);

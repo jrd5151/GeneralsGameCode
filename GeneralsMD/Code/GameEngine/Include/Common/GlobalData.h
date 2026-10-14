@@ -436,6 +436,9 @@ public:
 	// TheSuperHackers @feature bobtista 28/06/2026 user-configurable speed multiplier for game window transitions
 	Real m_gameWindowTransitionSpeedMultiplier;
 
+	// user-configurable multiplier for the default, min and max camera height, applied on top of the aspect ratio scale
+	Real m_cameraHeightScale;
+
 	Real m_shakeSubtleIntensity;			///< Intensity for shaking a camera with SHAKE_SUBTLE
 	Real m_shakeNormalIntensity;			///< Intensity for shaking a camera with SHAKE_NORMAL
 	Real m_shakeStrongIntensity;			///< Intensity for shaking a camera with SHAKE_STRONG

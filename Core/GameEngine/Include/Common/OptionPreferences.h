@@ -131,4 +131,6 @@ public:
 	Bool getShowMoneyPerMinute() const;
 
 	Real getGameWindowTransitionSpeedMultiplier() const;
+
+	Real getCameraHeightScale() const;
 };

@@ -800,6 +800,16 @@ static void saveOptions()
 	}
 
 	//-------------------------------------------------------------------------------------------------
+	// Set Camera Height Scale
+	{
+		Real scale = pref->getCameraHeightScale();
+		AsciiString prefString;
+		prefString.format("%g", scale);
+		(*pref)["CameraHeightScale"] = prefString;
+		TheWritableGlobalData->m_cameraHeightScale = scale;
+	}
+
+	//-------------------------------------------------------------------------------------------------
 	// Set JPEG screenshot quality
 	{
 		Int quality = pref->getJpegQuality();

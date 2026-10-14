@@ -49,9 +49,75 @@
 // USER INCLUDES //////////////////////////////////////////////////////////////
 #include "GameClient/Gadget.h"
 #include "GameClient/GameWindowGlobal.h"
+#include "GameClient/HudLayout.h"
+#include "GameClient/VideoPlayer.h"
 #include "W3DDevice/GameClient/W3DGameWindow.h"
 #include "W3DDevice/GameClient/W3DGameWindowManager.h"
 #include "W3DDevice/GameClient/W3DDisplay.h"
+
+// How much wider than a video its window must be before the video stops stretching to fill it.
+// Leaves windows authored at about the video's shape as they were.
+static const Real WidenedVideoTolerance = 1.05f;
+
+// The mission briefing videos have a grid around their frame, with a line every 20 of their 800
+// pixels. The sides beside such a video repeat a strip of its edge that is this many times
+// narrower than the video, so the grid carries on to the screen edges.
+static const Real VideoSideFillStripsPerWidth = 40.0f;
+
+//-------------------------------------------------------------------------------------------------
+/** Fill the window beside a video that keeps its shape by repeating strips from the video's
+  * edges. The left strip starts one pixel in: the briefings have no grid line in their first
+  * column, so the first copy, drawn over that column, puts the line back where it belongs. */
+//-------------------------------------------------------------------------------------------------
+static void drawVideoSideFill( VideoBuffer *video, Int windowLeft, Int windowRight,
+															 Int videoLeft, Int videoRight, Int top, Int bottom )
+{
+	const Real videoWidth = (Real)video->width();
+	const Real videoHeight = (Real)video->height();
+	const Real scale = (Real)( videoRight - videoLeft ) / videoWidth;
+	const Real strip = videoWidth / VideoSideFillStripsPerWidth;
+	if ( strip * scale < 1.0f )
+		return;
+
+	// Left side: copies of the strip from 1 to 1 + strip, moving outwards
+	for ( Int leftCopy = 1; ; ++leftCopy )
+	{
+		const Real sourceStart = 1.0f;
+		const Real sourceEnd = 1.0f + strip;
+		Real x1 = videoLeft + ( sourceStart - leftCopy * strip ) * scale;
+		const Real x2 = x1 + strip * scale;
+		if ( x2 <= (Real)windowLeft )
+			break;
+
+		Real clippedSourceStart = sourceStart;
+		if ( x1 < (Real)windowLeft )
+		{
+			clippedSourceStart += ( (Real)windowLeft - x1 ) / scale;
+			x1 = (Real)windowLeft;
+		}
+		TheDisplay->drawVideoBufferPart( video, REAL_TO_INT_FLOOR( x1 + 0.5f ), top, REAL_TO_INT_FLOOR( x2 + 0.5f ), bottom,
+																		 clippedSourceStart, 0.0f, sourceEnd, videoHeight );
+	}
+
+	// Right side: copies of the last strip of the video, moving outwards
+	for ( Int rightCopy = 1; ; ++rightCopy )
+	{
+		const Real sourceStart = videoWidth - strip;
+		const Real x1 = videoLeft + ( videoWidth + ( rightCopy - 1 ) * strip ) * scale;
+		Real x2 = x1 + strip * scale;
+		if ( x1 >= (Real)windowRight )
+			break;
+
+		Real clippedSourceEnd = videoWidth;
+		if ( x2 > (Real)windowRight )
+		{
+			clippedSourceEnd = sourceStart + ( (Real)windowRight - x1 ) / scale;
+			x2 = (Real)windowRight;
+		}
+		TheDisplay->drawVideoBufferPart( video, REAL_TO_INT_FLOOR( x1 + 0.5f ), top, REAL_TO_INT_FLOOR( x2 + 0.5f ), bottom,
+																		 sourceStart, 0.0f, clippedSourceEnd, videoHeight );
+	}
+}
 
 // DEFINES ////////////////////////////////////////////////////////////////////
 enum
@@ -385,7 +451,24 @@ void W3DGameWinDefaultDraw( GameWindow *window, WinInstanceData *instData )
 		window->winGetScreenPosition( &pos.x, &pos.y );
 		window->winGetSize( &size.x, &size.y );
 
-		TheDisplay->drawVideoBuffer( instData->m_videoBuffer, pos.x, pos.y, pos.x + size.x, pos.y + size.y );
+		// When the menus keep their shape, a video in a window that the screen made wider, such as a
+		// load screen, keeps its own shape, centered, and its edges are repeated out to the sides.
+		VideoBuffer *video = instData->m_videoBuffer;
+		if ( hud::isMenuShapeKept() && video->width() > 0 && video->height() > 0 && size.y > 0 )
+		{
+			const Real videoAspect = (Real)video->width() / (Real)video->height();
+			const Real windowAspect = (Real)size.x / (Real)size.y;
+			if ( windowAspect > videoAspect * WidenedVideoTolerance )
+			{
+				const Int width = REAL_TO_INT_FLOOR( size.y * videoAspect + 0.5f );
+				const Int videoLeft = pos.x + ( size.x - width ) / 2;
+				TheDisplay->drawVideoBuffer( video, videoLeft, pos.y, videoLeft + width, pos.y + size.y );
+				drawVideoSideFill( video, pos.x, pos.x + size.x, videoLeft, videoLeft + width, pos.y, pos.y + size.y );
+				return;
+			}
+		}
+
+		TheDisplay->drawVideoBuffer( video, pos.x, pos.y, pos.x + size.x, pos.y + size.y );
 	}
 
 }

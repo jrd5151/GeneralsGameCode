@@ -3051,6 +3051,31 @@ void W3DDisplay::drawVideoBuffer( VideoBuffer *buffer, Int startX, Int startY, I
 
 }
 
+//============================================================================
+// W3DDisplay::drawVideoBufferPart
+//============================================================================
+
+void W3DDisplay::drawVideoBufferPart( VideoBuffer *buffer, Int startX, Int startY, Int endX, Int endY,
+	Real sourceX1, Real sourceY1, Real sourceX2, Real sourceY2 )
+{
+	W3DVideoBuffer *vbuffer = (W3DVideoBuffer*) buffer;
+	if ( vbuffer->width() == 0 || vbuffer->height() == 0 )
+		return;
+
+	const Real width = (Real)vbuffer->width();
+	const Real height = (Real)vbuffer->height();
+
+	setup2DRenderState(vbuffer->texture(), DRAW_IMAGE_ALPHA, FALSE);
+
+	m_2DRender->Add_Quad( RectClass( startX, startY, endX, endY ),
+												vbuffer->Rect( sourceX1 / width, sourceY1 / height, sourceX2 / width, sourceY2 / height ) );
+
+	if (!m_isBatching)
+	{
+		m_2DRender->Render();
+	}
+}
+
 // W3DDisplay::setClipRegion ============================================
 /** Set the clipping region for images.
   @todo: Make this work for all primitives, not just drawImage. */

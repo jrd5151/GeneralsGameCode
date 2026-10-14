@@ -30,6 +30,8 @@
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#include <wctype.h>
+
 #include "gamespy/ghttp/ghttp.h"
 
 #include "Common/GameEngine.h"
@@ -408,6 +410,31 @@ GameWindow *win = nullptr;
 }
 
 //-------------------------------------------------------------------------------------------------
+/** TheSuperHackers @feature The main menu labels are written in capitals, so a new label is written in
+	* capitals too when the reference label is. */
+//-------------------------------------------------------------------------------------------------
+static UnicodeString matchLabelCase( const UnicodeString &text, GameWindow *reference )
+{
+	const UnicodeString referenceText = reference->winGetText();
+	Bool hasLower = FALSE;
+	Bool hasUpper = FALSE;
+	for (const WideChar *c = referenceText.str(); *c != 0; ++c)
+	{
+		if (iswlower( *c ))
+			hasLower = TRUE;
+		else if (iswupper( *c ))
+			hasUpper = TRUE;
+	}
+	if (!hasUpper || hasLower)
+		return text;
+
+	UnicodeString upper;
+	for (const WideChar *c = text.str(); *c != 0; ++c)
+		upper.concat( (WideChar)towupper( *c ) );
+	return upper;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** TheSuperHackers @feature Adds a Mods button to the main list, between Options and Credits. Credits
 	* and Exit move down one place and the panel behind the list grows to fit. */
 //-------------------------------------------------------------------------------------------------
@@ -447,7 +474,7 @@ static void initButtonMods()
 			break;
 	}
 
-	buttonMods = CreateLookAlikeButton( buttonOptions, buttonModsName, TheGameText->FETCH_OR_SUBSTITUTE( "GUI:ModMenu", L"Mods" ),
+	buttonMods = CreateLookAlikeButton( buttonOptions, buttonModsName, matchLabelCase( TheGameText->FETCH_OR_SUBSTITUTE( "GUI:ModMenu", L"Mods" ), buttonOptions ),
 		optionsX, creditsY, width, height );
 
 	// The button flashes in and out with the others.

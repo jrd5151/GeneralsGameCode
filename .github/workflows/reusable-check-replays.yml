@@ -30,18 +30,36 @@ jobs:
       GENERALS_PATH: C:\GameData\Generals
       GENERALSMD_PATH: C:\GameData\GeneralsMD
     steps:
+      - name: Check Game Data Availability
+        id: gamedata
+        env:
+          HAS_R2_SECRETS: ${{ secrets.R2_ACCESS_KEY_ID != '' && secrets.R2_SECRET_ACCESS_KEY != '' && secrets.R2_ENDPOINT_URL != '' }}
+        shell: pwsh
+        run: |
+          # Forks do not have access to the encrypted game data, so the replay check cannot run there.
+          if ($env:HAS_R2_SECRETS -eq 'true') {
+            "available=true" >> $env:GITHUB_OUTPUT
+          } else {
+            "available=false" >> $env:GITHUB_OUTPUT
+            Write-Host "::notice title=Replay check skipped::The R2 game data secrets are not set in this repository, so replays cannot be checked."
+            "### Replay check skipped`nThe R2 game data secrets are not set in this repository, so replays cannot be checked." >> $env:GITHUB_STEP_SUMMARY
+          }
+
       - name: Checkout Code
+        if: ${{ steps.gamedata.outputs.available == 'true' }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           submodules: true
 
       - name: Download Game Artifact
+        if: ${{ steps.gamedata.outputs.available == 'true' }}
         uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
           name: ${{ inputs.game }}-${{ inputs.preset }}
           path: build
 
       - name: Cache Game Data
+        if: ${{ steps.gamedata.outputs.available == 'true' }}
         id: cache-gamedata
         uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
@@ -49,7 +67,7 @@ jobs:
           key: gamedata-permanent-cache-v4
 
       - name: Download Game Data from Cloudflare R2
-        if: ${{ steps.cache-gamedata.outputs.cache-hit != 'true' }}
+        if: ${{ steps.gamedata.outputs.available == 'true' && steps.cache-gamedata.outputs.cache-hit != 'true' }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -128,6 +146,7 @@ jobs:
           Remove-Item zerohour104_gamedata_trimmed.7z -Verbose
 
       - name: Set Up Game Data
+        if: ${{ steps.gamedata.outputs.available == 'true' }}
         shell: pwsh
         run: |
           $source = "$env:GAME_PATH\${{ inputs.game }}"
@@ -135,6 +154,7 @@ jobs:
           Copy-Item -Path $source\* -Destination $destination -Recurse -Force
 
       - name: Set Generals InstallPath in Registry
+        if: ${{ steps.gamedata.outputs.available == 'true' }}
         shell: pwsh
         run: |
           # Zero Hour loads some Generals files and needs this registry key to find the
@@ -153,6 +173,7 @@ jobs:
           Write-Host "Registry key set: $regPath -> InstallPath = $installPath"
 
       - name: Move Replays and Maps to User Dir
+        if: ${{ steps.gamedata.outputs.available == 'true' }}
         shell: pwsh
         run: |
           # These files are expected in the user dir, so we move them here.
@@ -170,6 +191,7 @@ jobs:
           Move-Item -Path "$source\*" -Destination $destination -Force
 
       - name: Run Replay Compatibility Tests
+        if: ${{ steps.gamedata.outputs.available == 'true' }}
         shell: pwsh
         run: |
           $exePath = "build/generalszh.exe"

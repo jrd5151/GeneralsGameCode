@@ -134,5 +134,7 @@ public:
 
 	Real getCameraHeightScale() const;
 	Bool getCenteredHud() const; ///< TheSuperHackers @feature Keep the in-game HUD at 4:3 proportions, centered. Defaults to yes.
+	Bool getCenteredMenus() const; ///< TheSuperHackers @feature Keep the menus at 4:3 proportions, centered. Defaults to yes.
+	Int getHudSizePercent() const; ///< TheSuperHackers @feature Size of the centered HUD in percent. Defaults to 100.
 	AsciiString getSelectedMod() const; ///< TheSuperHackers @feature The mod picked in the mod menu, relative to the user data folder. Empty for none.
 };

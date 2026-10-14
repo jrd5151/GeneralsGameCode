@@ -56,6 +56,7 @@
 #include "GameClient/GadgetRadioButton.h"
 #include "GameClient/GadgetSlider.h"
 #include "GameClient/HeaderTemplate.h"
+#include "GameClient/HudLayout.h"
 #include "GameClient/Shell.h"
 #include "GameClient/KeyDefs.h"
 #include "GameClient/GameWindowManager.h"
@@ -215,6 +216,10 @@ static Bool ignoreSelected = FALSE;
 WindowLayout *OptionsLayout = nullptr;
 
 static OptionPreferences *pref = nullptr;
+
+// TheSuperHackers @feature The HUD size picked with the HUD size button, saved on accept.
+static Int s_hudSizePercent = hud::HudSizePercentMax;
+static Bool s_hudSizeChanged = FALSE;
 
 static void setDefaults()
 {
@@ -837,6 +842,15 @@ static void saveOptions()
 	}
 
 	//-------------------------------------------------------------------------------------------------
+	// TheSuperHackers @feature Set the HUD size
+	if (s_hudSizeChanged)
+	{
+		AsciiString prefString;
+		prefString.format("%d", s_hudSizePercent);
+		(*pref)["HudSize"] = prefString;
+	}
+
+	//-------------------------------------------------------------------------------------------------
 	// Set JPEG screenshot quality
 	{
 		Int quality = pref->getJpegQuality();
@@ -904,22 +918,24 @@ static void saveOptions()
 }
 
 //-------------------------------------------------------------------------------------------------
-/** TheSuperHackers @feature Creates the Mods button. The original layout has no such button, so it
-	* takes the look of the keyboard button next to it. */
+/** TheSuperHackers @feature Creates a button the original layout does not have, such as the Mods
+	* button. It takes the look of the given button. */
 //-------------------------------------------------------------------------------------------------
-static void createModMenuButton( GameWindow *lookAlike, Int x, Int y, Int width, Int height )
+static GameWindow *createLookAlikeButton( GameWindow *lookAlike, const char *windowName, const UnicodeString &text,
+	Int x, Int y, Int width, Int height )
 {
-	const NameKeyType buttonModMenuID = TheNameKeyGenerator->nameToKey( "OptionsMenu.wnd:ButtonModMenu" );
-	if (TheWindowManager->winGetWindowFromId( nullptr, buttonModMenuID ) != nullptr)
-		return;
+	const NameKeyType buttonID = TheNameKeyGenerator->nameToKey( windowName );
+	GameWindow *existing = TheWindowManager->winGetWindowFromId( nullptr, buttonID );
+	if (existing != nullptr)
+		return existing;
 
 	WinInstanceData *source = lookAlike->winGetInstanceData();
 
 	WinInstanceData instData;
 	instData.init();
 	instData.m_style = GWS_PUSH_BUTTON | GWS_MOUSE_TRACK;
-	instData.m_decoratedNameString = "OptionsMenu.wnd:ButtonModMenu";
-	instData.m_id = (Int)buttonModMenuID;
+	instData.m_decoratedNameString = windowName;
+	instData.m_id = (Int)buttonID;
 	instData.m_font = lookAlike->winGetFont();
 	for (Int i = 0; i < MAX_DRAW_DATA; ++i)
 	{
@@ -935,7 +951,20 @@ static void createModMenuButton( GameWindow *lookAlike, Int x, Int y, Int width,
 		WIN_STATUS_ENABLED | WIN_STATUS_IMAGE, x, y, width, height, &instData, instData.m_font, FALSE );
 
 	if (button)
-		GadgetButtonSetText( button, TheGameText->FETCH_OR_SUBSTITUTE( "GUI:ModMenu", L"Mods" ) );
+		GadgetButtonSetText( button, text );
+	return button;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** TheSuperHackers @feature The HUD size button steps through the sizes, from the full size down. */
+//-------------------------------------------------------------------------------------------------
+static void setHudSizeButtonText( GameWindow *button )
+{
+	if (button == nullptr)
+		return;
+	UnicodeString text;
+	text.format( L"%ls: %d%%", TheGameText->FETCH_OR_SUBSTITUTE( "GUI:HudSize", L"HUD Size" ).str(), s_hudSizePercent );
+	GadgetButtonSetText( button, text );
 }
 
 static void DestroyOptionsLayout() {
@@ -1443,8 +1472,25 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 			buttonKeyboard->winHide( FALSE );
 
 			if (showModButton)
-				createModMenuButton( buttonKeyboard, columnX - parentX + keyboardWidth + buttonGap, rowY - parentY + 1,
+				createLookAlikeButton( buttonKeyboard, "OptionsMenu.wnd:ButtonModMenu", TheGameText->FETCH_OR_SUBSTITUTE( "GUI:ModMenu", L"Mods" ),
+					columnX - parentX + keyboardWidth + buttonGap, rowY - parentY + 1,
 					columnWidth - keyboardWidth - buttonGap, rowHeight - 2 );
+
+			// TheSuperHackers @feature The HUD size button sits under the Mods button, at the right end of the
+			// scroll speed label. The control bar is rebuilt for a new size, so it is not offered during a match.
+			s_hudSizePercent = hud::getHudSizePercent();
+			s_hudSizeChanged = FALSE;
+			GameWindow *scrollSpeedLabel = TheWindowManager->winGetWindowFromId( nullptr, TheNameKeyGenerator->nameToKey( "OptionsMenu.wnd:ScrollSpeedLabel" ) );
+			if (showModButton && hud::isCenteredHudEnabled() && scrollSpeedLabel)
+			{
+				Int labelX, labelY, labelWidth, labelHeight;
+				scrollSpeedLabel->winGetScreenPosition( &labelX, &labelY );
+				scrollSpeedLabel->winGetSize( &labelWidth, &labelHeight );
+				GameWindow *buttonHudSize = createLookAlikeButton( buttonKeyboard, "OptionsMenu.wnd:ButtonHudSize", UnicodeString::TheEmptyString,
+					columnX - parentX + keyboardWidth + buttonGap, labelY - parentY + 1,
+					columnWidth - keyboardWidth - buttonGap, labelHeight - 2 );
+				setHudSizeButtonText( buttonHudSize );
+			}
 		}
 	}
 
@@ -1706,6 +1752,14 @@ WindowMsgHandledType OptionsMenuSystem( GameWindow *window, UnsignedInt msg,
 					pref = nullptr;
 				}
 
+				// TheSuperHackers @feature A new HUD size takes effect once the control bar is built again.
+				if (s_hudSizeChanged)
+				{
+					s_hudSizeChanged = FALSE;
+					hud::reloadSettings();
+					TheInGameUI->recreateControlBar();
+				}
+
 				comboBoxLANIP = nullptr;
 				comboBoxOnlineIP = nullptr;
 
@@ -1737,6 +1791,15 @@ WindowMsgHandledType OptionsMenuSystem( GameWindow *window, UnsignedInt msg,
 			else if (controlID == ButtonAdvancedCancelID )
 			{
 				cancelAdvancedOptions();
+			}
+			else if ( controlID == (Int)TheNameKeyGenerator->nameToKey( "OptionsMenu.wnd:ButtonHudSize" ) )
+			{
+				// TheSuperHackers @feature Step to the next smaller size, and back to full size after the smallest.
+				s_hudSizePercent -= hud::HudSizePercentStep;
+				if (s_hudSizePercent < hud::HudSizePercentMin)
+					s_hudSizePercent = hud::HudSizePercentMax;
+				s_hudSizeChanged = (s_hudSizePercent != hud::getHudSizePercent());
+				setHudSizeButtonText( control );
 			}
 			else if ( controlID == (Int)TheNameKeyGenerator->nameToKey( "OptionsMenu.wnd:ButtonModMenu" ) )
 			{

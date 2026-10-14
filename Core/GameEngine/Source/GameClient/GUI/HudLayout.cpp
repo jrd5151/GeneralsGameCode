@@ -33,7 +33,10 @@ namespace hud
 namespace
 {
 
-Int s_centeredHudSetting = -1; // -1 = not read yet, 0 = off, 1 = on
+Bool s_settingsRead = FALSE;
+Bool s_centeredHud = FALSE;
+Bool s_centeredMenus = FALSE;
+Int s_hudSizePercent = HudSizePercentMax;
 
 struct LayoutAnchor
 {
@@ -41,13 +44,19 @@ struct LayoutAnchor
 	Anchor anchor;
 };
 
-const LayoutAnchor s_layoutAnchors[] =
+const LayoutAnchor s_hudLayouts[] =
 {
 	{ "ControlBar.wnd", Anchor_BottomCenter },
 	{ "ControlBarPopupDescription.wnd", Anchor_BottomCenter },
 	{ "GeneralsExpPoints.wnd", Anchor_BottomCenter },
 	{ "ReplayControl.wnd", Anchor_BottomCenter },
 	{ "GenPowersShortcutBar*", Anchor_TopRight },
+};
+
+// Layouts that keep stretching even with centered menus: their code places them on screen itself.
+const char *const s_stretchedLayouts[] =
+{
+	"InGamePopupMessage.wnd",
 };
 
 const char *getBaseName(const char *filename)
@@ -69,35 +78,78 @@ Bool matchesLayoutName(const char *pattern, const char *name)
 	return stricmp(pattern, name) == 0;
 }
 
-} // namespace
-
-Bool isCenteredHudEnabled()
+Bool readSettings()
 {
 	if (TheDisplay == nullptr || TheFileSystem == nullptr)
 		return FALSE;
 
 	// Read once: this is asked for every font size adjustment.
-	if (s_centeredHudSetting < 0)
+	if (!s_settingsRead)
 	{
 		OptionPreferences pref;
-		s_centeredHudSetting = (pref.getCenteredHud() && !addon::HasFullviewportDat()) ? 1 : 0;
+		const Bool addonUi = addon::HasFullviewportDat();
+		s_centeredHud = pref.getCenteredHud() && !addonUi;
+		s_centeredMenus = pref.getCenteredMenus() && !addonUi;
+		s_hudSizePercent = pref.getHudSizePercent();
+		s_settingsRead = TRUE;
 	}
+	return TRUE;
+}
 
-	return s_centeredHudSetting == 1;
+// A layout edge within this many layout pixels of the layout border counts as touching it.
+const Int SpanTolerance = 2;
+
+} // namespace
+
+Bool isCenteredHudEnabled()
+{
+	return readSettings() && s_centeredHud;
+}
+
+Bool isCenteredMenusEnabled()
+{
+	return readSettings() && s_centeredMenus;
+}
+
+Int getHudSizePercent()
+{
+	if (!readSettings() || !s_centeredHud)
+		return HudSizePercentMax;
+	return s_hudSizePercent;
+}
+
+void reloadSettings()
+{
+	s_settingsRead = FALSE;
+}
+
+Bool isHudAnchor(Anchor anchor)
+{
+	return anchor == Anchor_BottomCenter || anchor == Anchor_TopRight;
 }
 
 Anchor getLayoutAnchor(const char *layoutFilename)
 {
-	if (layoutFilename == nullptr || !isCenteredHudEnabled())
+	if (layoutFilename == nullptr)
 		return Anchor_None;
 
 	const char *name = getBaseName(layoutFilename);
-	for (size_t i = 0; i < ARRAY_SIZE(s_layoutAnchors); ++i)
+	size_t i;
+	for (i = 0; i < ARRAY_SIZE(s_hudLayouts); ++i)
 	{
-		if (matchesLayoutName(s_layoutAnchors[i].name, name))
-			return s_layoutAnchors[i].anchor;
+		if (matchesLayoutName(s_hudLayouts[i].name, name))
+			return isCenteredHudEnabled() ? s_hudLayouts[i].anchor : Anchor_None;
 	}
-	return Anchor_None;
+
+	if (!isCenteredMenusEnabled())
+		return Anchor_None;
+
+	for (i = 0; i < ARRAY_SIZE(s_stretchedLayouts); ++i)
+	{
+		if (matchesLayoutName(s_stretchedLayouts[i], name))
+			return Anchor_None;
+	}
+	return Anchor_Center;
 }
 
 Bool getTransform(Anchor anchor, Int creationResX, Int creationResY, Coord2D *scale, ICoord2D *offset)
@@ -117,8 +169,11 @@ Bool getTransform(Anchor anchor, Int creationResX, Int creationResY, Coord2D *sc
 	}
 
 	// Fit the layout inside the display without distorting it. On wide screens this is the height
-	// ratio, so the HUD covers the same share of the screen height as it did at 4:3.
-	const Real uniform = min(xScale, yScale);
+	// ratio, so the layout covers the same share of the screen height as it did at 4:3.
+	Real uniform = min(xScale, yScale);
+	if (isHudAnchor(anchor))
+		uniform *= (Real)getHudSizePercent() / 100.0f;
+
 	const Real layoutWidth = (Real)creationResX * uniform;
 	const Real layoutHeight = (Real)creationResY * uniform;
 
@@ -136,8 +191,56 @@ Bool getTransform(Anchor anchor, Int creationResX, Int creationResY, Coord2D *sc
 		offset->x = REAL_TO_INT_FLOOR(displayWidth - layoutWidth);
 		offset->y = 0;
 		break;
+	case Anchor_Center:
+		offset->x = REAL_TO_INT_FLOOR((displayWidth - layoutWidth) * 0.5f);
+		offset->y = REAL_TO_INT_FLOOR((displayHeight - layoutHeight) * 0.5f);
+		break;
 	}
 	return TRUE;
+}
+
+void transformRect(Anchor anchor, Int creationResX, Int creationResY, IRegion2D *rect)
+{
+	Coord2D scale;
+	ICoord2D offset;
+	getTransform(anchor, creationResX, creationResY, &scale, &offset);
+
+	const Bool spansWidth = rect->lo.x <= SpanTolerance && rect->hi.x >= creationResX - 1 - SpanTolerance;
+	const Bool spansHeight = rect->lo.y <= SpanTolerance && rect->hi.y >= creationResY - 1 - SpanTolerance;
+
+	if (anchor == Anchor_Center && spansWidth)
+	{
+		// Backgrounds and full width bars reach the screen edges, like they did before.
+		const Real xScale = (Real)TheDisplay->getWidth() / (Real)creationResX;
+		rect->lo.x = (Int)((Real)rect->lo.x * xScale);
+		rect->hi.x = (Int)((Real)rect->hi.x * xScale);
+	}
+	else
+	{
+		rect->lo.x = (Int)((Real)rect->lo.x * scale.x) + offset.x;
+		rect->hi.x = (Int)((Real)rect->hi.x * scale.x) + offset.x;
+	}
+
+	if (anchor == Anchor_Center && spansHeight)
+	{
+		const Real yScale = (Real)TheDisplay->getHeight() / (Real)creationResY;
+		rect->lo.y = (Int)((Real)rect->lo.y * yScale);
+		rect->hi.y = (Int)((Real)rect->hi.y * yScale);
+	}
+	else
+	{
+		rect->lo.y = (Int)((Real)rect->lo.y * scale.y) + offset.y;
+		rect->hi.y = (Int)((Real)rect->hi.y * scale.y) + offset.y;
+	}
+}
+
+Coord2D getMenuScale()
+{
+	Coord2D scale;
+	ICoord2D offset;
+	getTransform(isCenteredMenusEnabled() ? Anchor_Center : Anchor_None,
+		DEFAULT_DISPLAY_WIDTH, DEFAULT_DISPLAY_HEIGHT, &scale, &offset);
+	return scale;
 }
 
 Bool isControlBarNarrowerThanScreen()

@@ -99,6 +99,10 @@ Bool readSettings()
 // A layout edge within this many layout pixels of the layout border counts as touching it.
 const Int SpanTolerance = 2;
 
+// The shell menus draw a frame into their stretched background art, 40 of 800 layout pixels in from
+// the left and right. Parts moved to a screen edge keep that line where the stretched frame has it.
+const Int FrameInsetDivisor = 20;
+
 } // namespace
 
 Bool isCenteredHudEnabled()
@@ -238,12 +242,15 @@ Side transformRect(Anchor anchor, Int creationResX, Int creationResY, IRegion2D 
 			side = Side_Center;
 	}
 
-	const Real layoutWidth = (Real)creationResX * scale.x;
+	// Line the part up with the stretched frame: the frame line on its side lands where the
+	// stretched background draws it, so a part inside the frame at 4:3 stays inside it.
+	const Real frameInset = (Real)(creationResX / FrameInsetDivisor);
+	const Real stretchGap = xScale - scale.x;
 	Int sideOffset;
 	switch (side)
 	{
-	case Side_Left: sideOffset = 0; break;
-	case Side_Right: sideOffset = REAL_TO_INT_FLOOR((Real)TheDisplay->getWidth() - layoutWidth); break;
+	case Side_Left: sideOffset = REAL_TO_INT_FLOOR(frameInset * stretchGap); break;
+	case Side_Right: sideOffset = REAL_TO_INT_FLOOR(((Real)creationResX - frameInset) * stretchGap); break;
 	default: sideOffset = offset.x; break;
 	}
 

@@ -49,6 +49,7 @@
 #include "GameClient/WindowLayout.h"
 #include "GameClient/Gadget.h"
 #include "GameClient/GadgetCheckBox.h"
+#include "GameClient/GadgetPushButton.h"
 #include "GameClient/GadgetStaticText.h"
 #include "GameClient/GadgetTextEntry.h"
 #include "GameClient/GadgetComboBox.h"
@@ -1377,6 +1378,31 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 	GadgetCheckBoxSetChecked(checkRetaliation, TheGlobalData->m_clientRetaliationModeEnabled);
 	GadgetCheckBoxSetChecked( checkDoubleClickAttackMove, TheGlobalData->m_doubleClickAttackMove );
 
+	// TheSuperHackers @feature Show the keyboard hotkeys button, which the original layout hides outside of the panel.
+	// It is placed in the free space next to the retaliation option, below the double click attack move option.
+	{
+		GameWindow *buttonKeyboard = TheWindowManager->winGetWindowFromId( nullptr, TheNameKeyGenerator->nameToKey( "OptionsMenu.wnd:ButtonKeyboardOptions" ) );
+		if (buttonKeyboard && checkRetaliation && checkDoubleClickAttackMove)
+		{
+			Int columnX, columnY, columnWidth, columnHeight;
+			Int rowX, rowY, rowWidth, rowHeight;
+			checkDoubleClickAttackMove->winGetScreenPosition( &columnX, &columnY );
+			checkDoubleClickAttackMove->winGetSize( &columnWidth, &columnHeight );
+			checkRetaliation->winGetScreenPosition( &rowX, &rowY );
+			checkRetaliation->winGetSize( &rowWidth, &rowHeight );
+
+			Int parentX = 0, parentY = 0;
+			if (buttonKeyboard->winGetParent())
+				buttonKeyboard->winGetParent()->winGetScreenPosition( &parentX, &parentY );
+
+			buttonKeyboard->winSetPosition( columnX - parentX, rowY - parentY + 1 );
+			buttonKeyboard->winSetSize( columnWidth, rowHeight - 2 );
+			buttonKeyboard->winSetFont( checkRetaliation->winGetFont() );
+			GadgetButtonSetText( buttonKeyboard, TheGameText->FETCH_OR_SUBSTITUTE( "GUI:KeyboardOptions", L"Keyboard Hotkeys" ) );
+			buttonKeyboard->winHide( FALSE );
+		}
+	}
+
 	// set scroll speed slider
 	// TheSuperHackers @tweak xezon 11/07/2025 No longer sets the slider position if the user setting
 	// is set beyond the slider limits. This gives the user more freedom to customize the scroll
@@ -1669,7 +1695,13 @@ WindowMsgHandledType OptionsMenuSystem( GameWindow *window, UnsignedInt msg,
 			}
 			else if ( controlID == buttonKeyboardOptionsMenu )
 			{
-				TheShell->push( "Menus/KeyboardOptionsMenu.wnd" );
+				// TheSuperHackers @fix The options menu is not on the shell stack, so the hotkey menu opens on top of it.
+				WindowLayout *keyboardLayout = TheWindowManager->winCreateLayout( "Menus/KeyboardOptionsMenu.wnd" );
+				if (keyboardLayout)
+				{
+					keyboardLayout->runInit();
+					keyboardLayout->bringForward();
+				}
 			}
 			else if(controlID == checkDrawAnchorID )
       {

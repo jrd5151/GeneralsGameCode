@@ -346,6 +346,9 @@ public:
 	MappableKeyCategories		m_category;				///< This is the category the key falls under
 	UnicodeString						m_description;		///< The description string for the keys
 	UnicodeString						m_displayName;		///< The display name of our command
+	// TheSuperHackers @feature The mapping before user changes, so the hotkey menu can reset and save only what differs
+	MappableKeyType					m_defaultKey;
+	MappableKeyModState			m_defaultModState;
 };
 EMPTY_DTOR(MetaMapRec)
 
@@ -483,6 +486,19 @@ public:
 	void verifyMetaMap();
 
 	const MetaMapRec *getFirstMetaMapRec() const { return m_metaMaps; }
+	MetaMapRec *getFirstMetaMapRec() { return m_metaMaps; }
+
+	// TheSuperHackers @feature User hotkey changes. The defaults are taken after the game's own CommandMap
+	// files are loaded. The user's changes are written to CommandMap.ini in the user data folder.
+	void storeDefaults();
+	void resetToDefaults();
+	void loadUserMap();
+	Bool saveUserMap() const;
+	static AsciiString getUserMapFilename();
+
+	MetaMapRec *findMetaMapRec(GameMessage::Type t); ///< Returns null if the command has no mapping
+	static const char *getMetaTypeName(GameMessage::Type t); ///< Returns null if the command is unknown
+	static GameMessage::Type getMetaTypeByName(const char *name); ///< Returns MSG_INVALID if the command is unknown
 };
 
 extern MetaMap *TheMetaMap;

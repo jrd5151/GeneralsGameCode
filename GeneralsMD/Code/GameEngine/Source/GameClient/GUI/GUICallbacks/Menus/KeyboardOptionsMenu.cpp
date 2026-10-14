@@ -43,1119 +43,674 @@
 //-----------------------------------------------------------------------------
 ///////////////////////////////////////////////////////////////////////////////
 
+
+// TheSuperHackers @feature The original keyboard options menu was never finished. It is replaced with a
+// hotkey menu that lists the commands of the CommandMap, assigns a new key with modifiers by pressing it,
+// and saves the changes to CommandMap.ini in the user data folder.
+
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
-#include "Common/GameAudio.h"
-#include "Common/GameEngine.h"
-#include "Common/UserPreferences.h"
-
 #include "GameClient/WindowLayout.h"
 #include "GameClient/Gadget.h"
-#include "GameClient/GadgetCheckBox.h"
-#include "GameClient/GadgetComboBox.h"
 #include "GameClient/GadgetListBox.h"
-#include "GameClient/GadgetSlider.h"
+#include "GameClient/GadgetPushButton.h"
 #include "GameClient/GadgetStaticText.h"
-#include "GameClient/IMEManager.h"
-#include "GameClient/Shell.h"
 #include "GameClient/KeyDefs.h"
 #include "GameClient/GameWindowManager.h"
-#include "GameClient/Mouse.h"
 #include "GameClient/GameText.h"
 #include "GameClient/MetaEvent.h"
 
-#include "GameNetwork/FirewallHelper.h"
-#include "GameNetwork/IPEnumeration.h"
-
 // PRIVATE DATA ///////////////////////////////////////////////////////////////////////////////////
-WindowMsgHandledType KeyboardTextEntryInput( GameWindow *window, UnsignedInt msg,
-													 WindowMsgData mData1, WindowMsgData mData2 );
-
-static NameKeyType buttonBackID = NAMEKEY_INVALID;
-static GameWindow *buttonBack = nullptr;
+static WindowLayout *keyboardOptionsLayout = nullptr;
 
 static NameKeyType parentKeyboardOptionsMenuID = NAMEKEY_INVALID;
-static GameWindow *parentKeyboardOptionsMenu = nullptr;
-
-static NameKeyType comboBoxCategoryListID = NAMEKEY_INVALID;
-static GameWindow *comboBoxCategoryList = nullptr;
-
 static NameKeyType listBoxCommandListID = NAMEKEY_INVALID;
-static GameWindow *listBoxCommandList   = nullptr;
-
-static NameKeyType staticTextDescriptionID = NAMEKEY_INVALID;
-static GameWindow *staticTextDescription   = nullptr;
-
-static NameKeyType staticTextCurrentHotkeyID = NAMEKEY_INVALID;
-static GameWindow *staticTextCurrentHotkey     = nullptr;
-
+static NameKeyType buttonChangeKeyID = NAMEKEY_INVALID;
+static NameKeyType buttonClearKeyID = NAMEKEY_INVALID;
 static NameKeyType buttonResetAllID = NAMEKEY_INVALID;
-static GameWindow *buttonResetAll   = nullptr;
+static NameKeyType buttonBackID = NAMEKEY_INVALID;
 
-static NameKeyType textEntryAssignHotkeyID = NAMEKEY_INVALID;
-static GameWindow *textEntryAssignHotkey   = nullptr;
+static GameWindow *parentKeyboardOptionsMenu = nullptr;
+static GameWindow *listBoxCommandList = nullptr;
+static GameWindow *staticTextDescription = nullptr;
+static GameWindow *staticTextStatus = nullptr;
 
-static NameKeyType buttonAssignID = NAMEKEY_INVALID;
-static GameWindow *buttonAssign = nullptr;
+static MetaMapRec *captureRec = nullptr; ///< The command that waits for a key press
+static UnsignedByte swallowKeyUp = KEY_NONE; ///< The key whose release is ignored after it was assigned
 
-//use Bools to test if modifiers are used
-
-Bool shiftDown = false;
-Bool altDown = false;
-Bool ctrlDown = false;
-
-// shows whether or not a correctly formatted hotkey assignment is in the text area
-Bool absolute = false;
-
-// initialize these, they will be used a lot
-UnicodeString alt;
-UnicodeString ctrl;
-UnicodeString shift;
-
-
-
-void populateCategoryBox()
+static const MappableKeyCategories CategoryOrder[] =
 {
-	Int i;
-	Int index;
-	Color color =  GameMakeColor(255,255,255,255);
-	AsciiString temp;
-	UnicodeString str;
-	GadgetComboBoxReset(comboBoxCategoryList);
-	for ( i = 0; i < CATEGORY_NUM_CATEGORIES; ++i)
-	{
-		temp.format("GUI:%s", CategoryListName[i]);
-		str = TheGameText->fetch( temp );
-		index = GadgetComboBoxAddEntry(comboBoxCategoryList, str, color);
-	}
+	CATEGORY_CONTROL,
+	CATEGORY_SELECTION,
+	CATEGORY_TEAM,
+	CATEGORY_INTERFACE,
+	CATEGORY_INFORMATION,
+	CATEGORY_TAUNT,
+	CATEGORY_MISC,
+};
 
-	GadgetComboBoxSetSelectedPos(comboBoxCategoryList, 0);
-}
-
-// keeps track of whether or not each text modifier is being currently displayed in the text entry field
-void setKeyDown( UnicodeString mod, Bool b )
+struct KeyLabel
 {
-	if( mod == TheGameText->fetch( "KEYBOARD:Shift+" ) )
-		shiftDown = b;
-	else if( mod == TheGameText->fetch( "KEYBOARD:Ctrl+" ) )
-		ctrlDown = b;
-	else
-		altDown = b;
-}
+	MappableKeyType key;
+	const WideChar *label;
+};
 
-// initialized the command list box
-void fillCommandListBox( MappableKeyCategories cat )
+static const KeyLabel SpecialKeyLabels[] =
 {
-	if(!listBoxCommandList)
-		return;
+	{ MK_KP0, L"Num 0" }, { MK_KP1, L"Num 1" }, { MK_KP2, L"Num 2" }, { MK_KP3, L"Num 3" }, { MK_KP4, L"Num 4" },
+	{ MK_KP5, L"Num 5" }, { MK_KP6, L"Num 6" }, { MK_KP7, L"Num 7" }, { MK_KP8, L"Num 8" }, { MK_KP9, L"Num 9" },
+	{ MK_KPDEL, L"Num Del" }, { MK_KPSTAR, L"Num *" }, { MK_KPMINUS, L"Num -" }, { MK_KPPLUS, L"Num +" },
+	{ MK_KPENTER, L"Num Enter" }, { MK_KPSLASH, L"Num /" },
+	{ MK_ESC, L"Esc" }, { MK_BACKSPACE, L"Backspace" }, { MK_ENTER, L"Enter" }, { MK_SPACE, L"Space" }, { MK_TAB, L"Tab" },
+	{ MK_MINUS, L"-" }, { MK_EQUAL, L"=" }, { MK_LBRACKET, L"[" }, { MK_RBRACKET, L"]" }, { MK_SEMICOLON, L";" },
+	{ MK_APOSTROPHE, L"'" }, { MK_TICK, L"`" }, { MK_BACKSLASH, L"\\" }, { MK_COMMA, L"," }, { MK_PERIOD, L"." },
+	{ MK_SLASH, L"/" }, { MK_UP, L"Up" }, { MK_DOWN, L"Down" }, { MK_LEFT, L"Left" }, { MK_RIGHT, L"Right" },
+	{ MK_HOME, L"Home" }, { MK_END, L"End" }, { MK_PGUP, L"Page Up" }, { MK_PGDN, L"Page Down" },
+	{ MK_INS, L"Insert" }, { MK_DEL, L"Delete" },
+};
 
-	GadgetListBoxReset(listBoxCommandList);
-	Color color =  GameMakeColor(255,255,255,255);
-
-	for(const MetaMapRec *rec = TheMetaMap->getFirstMetaMapRec(); rec; rec = rec->m_next)
-	{
-		if(rec->m_category == cat)
-			GadgetListBoxAddEntryText(listBoxCommandList, rec->m_displayName, color, -1, -1 );
-
-	}
-}
-
-void doKeyUp(EntryData *e, UnicodeString mod )
-{
-	char c = e->text->getText().getCharAt( e->text->getTextLength() - 1);
-	// if there are modifiers, check which ones exist and act accordingly
-	if( c == '+' )
-	{
-		// if all of the mods are down, make string out of other two
-		if( altDown && ctrlDown && shiftDown )
-		{
-			if( mod == shift )
-			{
-				UnicodeString temp = alt;
-				temp.concat( ctrl );
-				e->text->setText( temp );
-				e->charPos = e->text->getTextLength();
-				setKeyDown( mod, false );
-			}
-			else if( mod == alt )
-			{
-				UnicodeString temp = ctrl;
-				temp.concat( shift );
-				e->text->setText( temp );
-				e->charPos = e->text->getTextLength();
-				setKeyDown( mod, false );
-			}
-			else if( mod == ctrl )
-			{
-				UnicodeString temp = alt;
-				temp.concat( shift );
-				e->text->setText( temp );
-				e->charPos = e->text->getTextLength();
-				setKeyDown( mod, false );
-			}
-		}
-		// if alt and ctrl are both down
-		else if( altDown && ctrlDown )
-		{
-			if( mod == alt )
-			{
-				e->text->setText( ctrl );
-				e->charPos = e->text->getTextLength();
-				setKeyDown( mod, false );
-			}
-			else if( mod == ctrl )
-			{
-				e->text->setText( ctrl );
-				e->charPos = e->text->getTextLength();
-				setKeyDown( mod, false );
-			}
-		}
-		// if alt and shift are both down
-		else if( altDown && shiftDown )
-		{
-			if( mod == alt )
-			{
-				e->text->setText( shift );
-				e->charPos = e->text->getTextLength();
-				setKeyDown( mod, false );
-			}
-			else if( mod == shift )
-			{
-				e->text->setText( alt );
-				e->charPos = e->text->getTextLength();
-				setKeyDown( mod, false );
-			}
-		}
-		// if ctrl and shift are both down
-		else if( ctrlDown && shiftDown )
-		{
-			if( mod == ctrl )
-			{
-				e->text->setText( shift );
-				e->charPos = e->text->getTextLength();
-				setKeyDown( mod, false );
-			}
-			else if( mod == shift )
-			{
-				e->text->setText( ctrl );
-				e->charPos = e->text->getTextLength();
-				setKeyDown( mod, false );
-			}
-		}
-		// else only one mod, just clear everything
-		else
-		{
-			e->text->setText( UnicodeString::TheEmptyString );
-			e->sText->setText( UnicodeString::TheEmptyString );
-			e->charPos = e->text->getTextLength();
-			setKeyDown( mod, false );
-		}
-	}
-	else
-	{
-		// this absolute thang will/might need more than one test
-		absolute = true;
-	}
-}
-
-// preforms the correct action when a modifier key is pressed down
-void doKeyDown(EntryData *e, UnicodeString mod )
-{
-	// simple cases if there are no mods present
-	//sanity check
-	if( e->text->getTextLength() <= 1 )
-	{
-		// reset text
-		e->text->setText( mod );
-		e->sText->setText( mod );
-		e->charPos = e->text->getTextLength();
-		setKeyDown( mod, true );
-	}
-
-	else //if( e->text->getTextLength() )
-	{
-		char c = e->text->getText().getCharAt( e->text->getTextLength() - 1);
-		if( c != '+' && absolute)
-		{
-				e->text->setText( mod );
-				e->sText->setText( mod );
-				e->charPos = e->text->getTextLength();
-				// try resetting all mods first
-				setKeyDown( shift, false );
-				setKeyDown( alt, false );
-				setKeyDown( ctrl, false );
-
-				setKeyDown( mod, true );
-				absolute = false;
-
-		}
-		//else only allow modifiers are present
-		else
-		{
-			if( mod == shift && shiftDown )
-			{
-			}
-			else if( mod == ctrl && ctrlDown )
-			{
-			}
-			else if( mod == alt && altDown )
-			{
-			}
-			else
-			{
-				//figure out the cases for which mod goes first
-
-				// puts shift at the end of the mods
-				if( altDown && ctrlDown)
-				{
-					UnicodeString temp = alt;
-					temp.concat( ctrl );
-					temp.concat( mod );
-					e->text->setText(temp);
-					e->charPos = e->text->getTextLength();
-					setKeyDown( mod, true );
-				}
-				// if alt and shift are down, puts ctrl in the middle
-				else if( altDown && shiftDown )
-				{
-					UnicodeString temp = alt;
-					temp.concat( ctrl );
-					temp.concat( shift );
-					e->text->setText( temp );
-					e->charPos = e->text->getTextLength();
-					setKeyDown( mod, true );
-				}
-				// puts either shift or ctrl after alt
-				else if( altDown )
-				{
-					UnicodeString temp = alt;
-					temp.concat( mod );
-					e->text->setText(temp);
-					e->charPos = e->text->getTextLength();
-					setKeyDown( mod, true );
-				}
-				// puts alt infront of these two
-				else if( ctrlDown && shiftDown )
-				{
-					UnicodeString temp = alt;
-					temp.concat( ctrl );
-					temp.concat( shift );
-					e->text->setText( temp );
-					e->charPos = e->text->getTextLength();
-					setKeyDown( mod, true );
-				}
-				// if only ctrl+ is currently being displayed
-				else if( ctrlDown )
-				{
-					// if it's alt, put it in front
-					if( mod == alt )
-					{
-						UnicodeString temp = mod;
-						temp.concat( ctrl );
-						e->text->setText( temp );
-						e->charPos = e->text->getTextLength();
-						setKeyDown( mod, true );
-					}
-					//else put shift after ctrl
-					else
-					{
-						UnicodeString temp = ctrl;
-						temp.concat( mod );
-						e->text->setText( temp );
-						e->charPos = e->text->getTextLength();
-						setKeyDown( mod, true );
-					}
-				}
-				// else put alt or ctrl in front of shift
-				else if( shiftDown )
-				{
-					UnicodeString temp = mod;
-					temp.concat( shift );
-					e->text->setText( temp );
-					e->charPos = e->text->getTextLength();
-					setKeyDown( mod, true );
-				}
-
-			}
-
-		}
-	}
-}
-
+// PRIVATE FUNCTIONS //////////////////////////////////////////////////////////////////////////////
 
 //-------------------------------------------------------------------------------------------------
-/** Initialize the options menu */
+static Bool isMappableKey(Int key)
+{
+	if (key == MK_NONE)
+		return FALSE;
+
+	for (const LookupListRec *keyName = KeyNames; keyName->name; ++keyName)
+	{
+		if (keyName->value == key)
+			return TRUE;
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+static UnicodeString getKeyLabel(MappableKeyType key, MappableKeyModState modState)
+{
+	if (key == MK_NONE)
+		return TheGameText->FETCH_OR_SUBSTITUTE("KEYBOARD:Unassigned", L"-");
+
+	UnicodeString label;
+	if (modState & CTRL)
+		label.concat(TheGameText->FETCH_OR_SUBSTITUTE("KEYBOARD:Ctrl+", L"Ctrl+"));
+	if (modState & ALT)
+		label.concat(TheGameText->FETCH_OR_SUBSTITUTE("KEYBOARD:Alt+", L"Alt+"));
+	if (modState & SHIFT)
+		label.concat(TheGameText->FETCH_OR_SUBSTITUTE("KEYBOARD:Shift+", L"Shift+"));
+
+	for (Int i = 0; i < ARRAY_SIZE(SpecialKeyLabels); ++i)
+	{
+		if (SpecialKeyLabels[i].key == key)
+		{
+			label.concat(SpecialKeyLabels[i].label);
+			return label;
+		}
+	}
+
+	// Letters, digits and function keys use their INI name without the prefix, such as "KEY_F1" -> "F1"
+	for (const LookupListRec *keyName = KeyNames; keyName->name; ++keyName)
+	{
+		if (keyName->value == key)
+		{
+			const char *name = keyName->name;
+			if (strncmp(name, "KEY_", 4) == 0)
+				name += 4;
+
+			UnicodeString keyLabel;
+			keyLabel.translate(AsciiString(name));
+			label.concat(keyLabel);
+			return label;
+		}
+	}
+
+	return label;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Returns the END_ command that belongs to a BEGIN_ command, such as the release of a held camera key */
+//-------------------------------------------------------------------------------------------------
+static MetaMapRec *findPairedRec(const MetaMapRec *rec)
+{
+	const char *name = MetaMap::getMetaTypeName(rec->m_meta);
+	if (name == nullptr || strncmp(name, "BEGIN_", 6) != 0)
+		return nullptr;
+
+	AsciiString endName("END_");
+	endName.concat(name + 6);
+
+	const GameMessage::Type endType = MetaMap::getMetaTypeByName(endName.str());
+	if (endType == GameMessage::MSG_INVALID)
+		return nullptr;
+
+	return TheMetaMap->findMetaMapRec(endType);
+}
+
+//-------------------------------------------------------------------------------------------------
+static Bool isRebindable(const MetaMapRec *rec)
+{
+	if (rec->m_usableIn == COMMANDUSABLE_NONE || rec->m_category == CATEGORY_DEBUG)
+		return FALSE;
+
+	const char *name = MetaMap::getMetaTypeName(rec->m_meta);
+	if (name == nullptr)
+		return FALSE;
+
+	// The release half of a held command follows its BEGIN_ command.
+	if (strncmp(name, "END_", 4) == 0)
+		return FALSE;
+
+	if (strncmp(name, "DEMO_", 5) == 0 || strncmp(name, "DEBUG_", 6) == 0 || strncmp(name, "CHEAT_", 6) == 0)
+		return FALSE;
+
+	// Commands that are only a held modifier, such as force attack with CTRL, are not hotkeys.
+	if (rec->m_defaultKey == MK_NONE && rec->m_defaultModState != NONE)
+		return FALSE;
+
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+static UnicodeString getCommandLabel(const MetaMapRec *rec)
+{
+	if (!rec->m_displayName.isEmpty())
+		return rec->m_displayName;
+
+	// Commands without a display name use their INI name, such as "BEGIN_CAMERA_ZOOM_IN" -> "Camera Zoom In"
+	const char *name = MetaMap::getMetaTypeName(rec->m_meta);
+	if (name == nullptr)
+		return UnicodeString::TheEmptyString;
+
+	if (strncmp(name, "BEGIN_", 6) == 0)
+		name += 6;
+
+	UnicodeString label;
+	Bool startOfWord = TRUE;
+	for (const char *c = name; *c; ++c)
+	{
+		if (*c == '_')
+		{
+			label.concat(L' ');
+			startOfWord = TRUE;
+			continue;
+		}
+
+		const char ch = startOfWord ? (char)toupper(*c) : (char)tolower(*c);
+		label.concat((WideChar)ch);
+		startOfWord = FALSE;
+	}
+	return label;
+}
+
+//-------------------------------------------------------------------------------------------------
+static UnicodeString getCategoryLabel(MappableKeyCategories category)
+{
+	switch (category)
+	{
+	case CATEGORY_CONTROL:     return TheGameText->FETCH_OR_SUBSTITUTE("KEYBOARD:CategoryControl", L"Unit Commands");
+	case CATEGORY_INFORMATION: return TheGameText->FETCH_OR_SUBSTITUTE("KEYBOARD:CategoryInformation", L"Information");
+	case CATEGORY_INTERFACE:   return TheGameText->FETCH_OR_SUBSTITUTE("KEYBOARD:CategoryInterface", L"Interface");
+	case CATEGORY_SELECTION:   return TheGameText->FETCH_OR_SUBSTITUTE("KEYBOARD:CategorySelection", L"Selection");
+	case CATEGORY_TAUNT:       return TheGameText->FETCH_OR_SUBSTITUTE("KEYBOARD:CategoryTaunt", L"Taunts");
+	case CATEGORY_TEAM:        return TheGameText->FETCH_OR_SUBSTITUTE("KEYBOARD:CategoryTeam", L"Control Groups");
+	default:                   return TheGameText->FETCH_OR_SUBSTITUTE("KEYBOARD:CategoryMisc", L"Other");
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+static void setStatus(const UnicodeString &text)
+{
+	if (staticTextStatus)
+		GadgetStaticTextSetText(staticTextStatus, text);
+}
+
+//-------------------------------------------------------------------------------------------------
+static MetaMapRec *getSelectedRec()
+{
+	if (listBoxCommandList == nullptr)
+		return nullptr;
+
+	Int selected = -1;
+	GadgetListBoxGetSelected(listBoxCommandList, &selected);
+	if (selected < 0)
+		return nullptr;
+
+	return (MetaMapRec *)GadgetListBoxGetItemData(listBoxCommandList, selected, 0);
+}
+
+//-------------------------------------------------------------------------------------------------
+static void updateDescription()
+{
+	if (staticTextDescription == nullptr)
+		return;
+
+	const MetaMapRec *rec = getSelectedRec();
+	GadgetStaticTextSetText(staticTextDescription, rec ? rec->m_description : UnicodeString::TheEmptyString);
+}
+
+//-------------------------------------------------------------------------------------------------
+static void fillCommandList()
+{
+	if (listBoxCommandList == nullptr)
+		return;
+
+	Int selected = -1;
+	GadgetListBoxGetSelected(listBoxCommandList, &selected);
+	const Int topEntry = GadgetListBoxGetTopVisibleEntry(listBoxCommandList);
+
+	GadgetListBoxReset(listBoxCommandList);
+
+	// The meta map is a list with the last parsed command first. Show the commands in INI order.
+	std::vector<MetaMapRec *> recs;
+	for (MetaMapRec *rec = TheMetaMap->getFirstMetaMapRec(); rec; rec = rec->m_next)
+	{
+		if (isRebindable(rec))
+			recs.insert(recs.begin(), rec);
+	}
+
+	const Color headerColor = GameMakeColor(255, 204, 0, 255);
+	const Color commandColor = GameMakeColor(255, 255, 255, 255);
+	const Color keyColor = GameMakeColor(186, 255, 12, 255);
+	const Color changedKeyColor = GameMakeColor(255, 160, 64, 255);
+
+	for (Int c = 0; c < ARRAY_SIZE(CategoryOrder); ++c)
+	{
+		const MappableKeyCategories category = CategoryOrder[c];
+		Bool hasHeader = FALSE;
+
+		for (size_t i = 0; i < recs.size(); ++i)
+		{
+			MetaMapRec *rec = recs[i];
+			const MappableKeyCategories recCategory = (rec->m_category < CATEGORY_NUM_CATEGORIES) ? rec->m_category : CATEGORY_MISC;
+			if (recCategory != category)
+				continue;
+
+			if (!hasHeader)
+			{
+				const Int headerRow = GadgetListBoxAddEntryText(listBoxCommandList, getCategoryLabel(category), headerColor, -1, 0);
+				GadgetListBoxAddEntryText(listBoxCommandList, UnicodeString::TheEmptyString, headerColor, headerRow, 1);
+				GadgetListBoxSetItemData(listBoxCommandList, nullptr, headerRow, 0);
+				hasHeader = TRUE;
+			}
+
+			const Bool changed = rec->m_key != rec->m_defaultKey || rec->m_modState != rec->m_defaultModState;
+			UnicodeString commandLabel(L"   ");
+			commandLabel.concat(getCommandLabel(rec));
+
+			const Int row = GadgetListBoxAddEntryText(listBoxCommandList, commandLabel, commandColor, -1, 0);
+			GadgetListBoxAddEntryText(listBoxCommandList, getKeyLabel(rec->m_key, rec->m_modState), changed ? changedKeyColor : keyColor, row, 1);
+			GadgetListBoxSetItemData(listBoxCommandList, rec, row, 0);
+		}
+	}
+
+	if (selected >= 0 && selected < GadgetListBoxGetNumEntries(listBoxCommandList))
+	{
+		GadgetListBoxSetSelected(listBoxCommandList, selected);
+		GadgetListBoxSetTopVisibleEntry(listBoxCommandList, topEntry);
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+static void saveChanges()
+{
+	if (!TheMetaMap->saveUserMap())
+	{
+		setStatus(TheGameText->FETCH_OR_SUBSTITUTE("KEYBOARD:SaveFailed", L"The hotkeys could not be saved."));
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+static void setRecKey(MetaMapRec *rec, MappableKeyType key, MappableKeyModState modState)
+{
+	rec->m_key = key;
+	rec->m_modState = modState;
+
+	MetaMapRec *pairedRec = findPairedRec(rec);
+	if (pairedRec)
+	{
+		pairedRec->m_key = key;
+		pairedRec->m_modState = modState;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+static void startCapture()
+{
+	MetaMapRec *rec = getSelectedRec();
+	if (rec == nullptr)
+	{
+		setStatus(TheGameText->FETCH_OR_SUBSTITUTE("KEYBOARD:SelectCommand", L"Select a command first."));
+		return;
+	}
+
+	captureRec = rec;
+
+	UnicodeString text;
+	text.format(TheGameText->FETCH_OR_SUBSTITUTE("KEYBOARD:PressKey", L"Press the new key for %ls. Esc cancels.").str(), getCommandLabel(rec).str());
+	setStatus(text);
+
+	TheWindowManager->winSetFocus(parentKeyboardOptionsMenu);
+}
+
+//-------------------------------------------------------------------------------------------------
+static void assignCapturedKey(MappableKeyType key, MappableKeyModState modState)
+{
+	MetaMapRec *rec = captureRec;
+	captureRec = nullptr;
+	if (rec == nullptr)
+		return;
+
+	// A key combination triggers only one command, so it is taken away from commands that are usable at the same time.
+	UnicodeString removedFrom;
+	for (MetaMapRec *other = TheMetaMap->getFirstMetaMapRec(); other; other = other->m_next)
+	{
+		if (other == rec || other == findPairedRec(rec))
+			continue;
+
+		if (other->m_key != key || other->m_modState != modState || other->m_transition != rec->m_transition)
+			continue;
+
+		if ((other->m_usableIn & rec->m_usableIn) == 0)
+			continue;
+
+		setRecKey(other, MK_NONE, NONE);
+
+		if (isRebindable(other))
+		{
+			if (!removedFrom.isEmpty())
+				removedFrom.concat(L", ");
+			removedFrom.concat(getCommandLabel(other));
+		}
+	}
+
+	setRecKey(rec, key, modState);
+	saveChanges();
+	fillCommandList();
+
+	UnicodeString text;
+	if (removedFrom.isEmpty())
+	{
+		text.format(TheGameText->FETCH_OR_SUBSTITUTE("KEYBOARD:Assigned", L"%ls is now %ls.").str(),
+			getCommandLabel(rec).str(), getKeyLabel(key, modState).str());
+	}
+	else
+	{
+		text.format(TheGameText->FETCH_OR_SUBSTITUTE("KEYBOARD:AssignedAndRemoved", L"%ls is now %ls. Removed it from %ls.").str(),
+			getCommandLabel(rec).str(), getKeyLabel(key, modState).str(), removedFrom.str());
+	}
+	setStatus(text);
+}
+
+//-------------------------------------------------------------------------------------------------
+static void closeKeyboardOptionsMenu()
+{
+	captureRec = nullptr;
+
+	if (parentKeyboardOptionsMenu)
+		TheWindowManager->winUnsetModal(parentKeyboardOptionsMenu);
+
+	if (keyboardOptionsLayout)
+	{
+		keyboardOptionsLayout->destroyWindows();
+		deleteInstance(keyboardOptionsLayout);
+		keyboardOptionsLayout = nullptr;
+	}
+
+	parentKeyboardOptionsMenu = nullptr;
+	listBoxCommandList = nullptr;
+	staticTextDescription = nullptr;
+	staticTextStatus = nullptr;
+
+	// Give the keyboard back to the options menu underneath.
+	GameWindow *optionsParent = TheWindowManager->winGetWindowFromId( nullptr, TheNameKeyGenerator->nameToKey( "OptionsMenu.wnd:OptionsMenuParent" ) );
+	if (optionsParent)
+		TheWindowManager->winSetFocus( optionsParent );
+}
+
+//-------------------------------------------------------------------------------------------------
+static void setButtonText(const char *name, const UnicodeString &text)
+{
+	GameWindow *button = TheWindowManager->winGetWindowFromId(nullptr, TheNameKeyGenerator->nameToKey(name));
+	if (button)
+		GadgetButtonSetText(button, text);
+}
+
+// PUBLIC FUNCTIONS ///////////////////////////////////////////////////////////////////////////////
+
+//-------------------------------------------------------------------------------------------------
+/** Initialize the keyboard options menu */
 //-------------------------------------------------------------------------------------------------
 void KeyboardOptionsMenuInit( WindowLayout *layout, void *userData )
 {
+	keyboardOptionsLayout = layout;
+	captureRec = nullptr;
+	swallowKeyUp = KEY_NONE;
 
-	//set keyboard focus to main parent
-	parentKeyboardOptionsMenuID = TheNameKeyGenerator->nameToKey("KeyboardOptionsMenu.wnd:ParentKeyboardOptionsMenu");
-	parentKeyboardOptionsMenu = TheWindowManager->winGetWindowFromId( nullptr, parentKeyboardOptionsMenuID );
-
-	// get ids for our children controls
+	parentKeyboardOptionsMenuID = TheNameKeyGenerator->nameToKey( "KeyboardOptionsMenu.wnd:ParentKeyboardOptionsMenu" );
+	listBoxCommandListID = TheNameKeyGenerator->nameToKey( "KeyboardOptionsMenu.wnd:ListBoxCommandList" );
+	buttonChangeKeyID = TheNameKeyGenerator->nameToKey( "KeyboardOptionsMenu.wnd:ButtonChangeKey" );
+	buttonClearKeyID = TheNameKeyGenerator->nameToKey( "KeyboardOptionsMenu.wnd:ButtonClearKey" );
+	buttonResetAllID = TheNameKeyGenerator->nameToKey( "KeyboardOptionsMenu.wnd:ButtonResetAll" );
 	buttonBackID = TheNameKeyGenerator->nameToKey( "KeyboardOptionsMenu.wnd:ButtonBack" );
-	buttonBack = TheWindowManager->winGetWindowFromId( parentKeyboardOptionsMenu, buttonBackID );
 
-	comboBoxCategoryListID = TheNameKeyGenerator->nameToKey( "KeyboardOptionsMenu.wnd:ComboBoxCategoryList" );
-	comboBoxCategoryList   = TheWindowManager->winGetWindowFromId( /*parentKeyboardOptionsMenu*/nullptr, comboBoxCategoryListID );
+	parentKeyboardOptionsMenu = TheWindowManager->winGetWindowFromId( nullptr, parentKeyboardOptionsMenuID );
+	listBoxCommandList = TheWindowManager->winGetWindowFromId( nullptr, listBoxCommandListID );
+	staticTextDescription = TheWindowManager->winGetWindowFromId( nullptr, TheNameKeyGenerator->nameToKey( "KeyboardOptionsMenu.wnd:StaticTextDescription" ) );
+	staticTextStatus = TheWindowManager->winGetWindowFromId( nullptr, TheNameKeyGenerator->nameToKey( "KeyboardOptionsMenu.wnd:StaticTextStatus" ) );
 
-	listBoxCommandListID   = TheNameKeyGenerator->nameToKey( "KeyboardOptionsMenu.wnd:ListBoxCommandList" );
-	listBoxCommandList     = TheWindowManager->winGetWindowFromId( nullptr, listBoxCommandListID );
+	GameWindow *staticTextTitle = TheWindowManager->winGetWindowFromId( nullptr, TheNameKeyGenerator->nameToKey( "KeyboardOptionsMenu.wnd:StaticTextTitle" ) );
+	if (staticTextTitle)
+		GadgetStaticTextSetText( staticTextTitle, TheGameText->FETCH_OR_SUBSTITUTE( "GUI:KeyboardOptions", L"Keyboard Hotkeys" ) );
 
-	staticTextDescriptionID = TheNameKeyGenerator->nameToKey( "KeyboardOptionsMenu.wnd:StaticTextDescription" );
-	staticTextDescription   = TheWindowManager->winGetWindowFromId( nullptr, staticTextDescriptionID );
+	setButtonText( "KeyboardOptionsMenu.wnd:ButtonChangeKey", TheGameText->FETCH_OR_SUBSTITUTE( "KEYBOARD:ChangeKey", L"Change Key" ) );
+	setButtonText( "KeyboardOptionsMenu.wnd:ButtonClearKey", TheGameText->FETCH_OR_SUBSTITUTE( "KEYBOARD:ClearKey", L"Clear Key" ) );
+	setButtonText( "KeyboardOptionsMenu.wnd:ButtonResetAll", TheGameText->FETCH_OR_SUBSTITUTE( "KEYBOARD:ResetAll", L"Reset All" ) );
+	setButtonText( "KeyboardOptionsMenu.wnd:ButtonBack", TheGameText->FETCH_OR_SUBSTITUTE( "GUI:Back", L"Back" ) );
 
-	staticTextCurrentHotkeyID = TheNameKeyGenerator->nameToKey( "KeyboardOptionsMenu.wnd:StaticTextCurrentHotkey" );
-	staticTextCurrentHotkey   = TheWindowManager->winGetWindowFromId( nullptr, staticTextCurrentHotkeyID );
+	fillCommandList();
+	updateDescription();
+	setStatus( TheGameText->FETCH_OR_SUBSTITUTE( "KEYBOARD:Help", L"Double click a command or select it and press Change Key. Unit build hotkeys come from the language file and are not listed." ) );
 
-	buttonResetAllID        = TheNameKeyGenerator->nameToKey( "KeyboardOptionsMenu.wnd:ButtonResetAll" );
-	buttonResetAll          = TheWindowManager->winGetWindowFromId( nullptr, buttonResetAllID );
-
-	textEntryAssignHotkeyID = TheNameKeyGenerator->nameToKey( "KeyboardOptionsMenu.wnd:TextEntryAssignHotkey" );
-	textEntryAssignHotkey   = TheWindowManager->winGetWindowFromId( nullptr, textEntryAssignHotkeyID );
-
-	buttonAssignID          = TheNameKeyGenerator->nameToKey( "KeyboardOptionsMenu.wnd:ButtonAssign" );
-	buttonAssign            = TheWindowManager->winGetWindowFromId( nullptr, buttonAssignID );
-
-
-
-	//special text entry box that needs its own function
-	textEntryAssignHotkey->winSetInputFunc( KeyboardTextEntryInput );
-
-	// populate category combo box
-	populateCategoryBox();
-
-	// populate command list
-	fillCommandListBox(CATEGORY_CONTROL);
-
-	//disable textEntry until specific command is chosen
-	textEntryAssignHotkey->winEnable( false );
-
-	//clear textEntry field
-	EntryData *e = (EntryData *)textEntryAssignHotkey->winGetUserData();
-	e->text->setText( UnicodeString::TheEmptyString );
-	e->charPos = e->text->getTextLength();
-
-	// set up these strings because they will be called a lot
-	alt   = TheGameText->fetch( "KEYBOARD:Alt+" );
-	ctrl = TheGameText->fetch( "KEYBOARD:Ctrl+" );
-	shift = TheGameText->fetch( "KEYBOARD:Shift+" );
-
-	// show menu
 	layout->hide( FALSE );
 
-	// set keyboard focus to main parent
-	TheWindowManager->winSetFocus( parentKeyboardOptionsMenu );
+	if (parentKeyboardOptionsMenu)
+	{
+		TheWindowManager->winSetModal( parentKeyboardOptionsMenu );
+		TheWindowManager->winSetFocus( parentKeyboardOptionsMenu );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
-/** options menu shutdown method */
+/** Keyboard options menu shutdown method */
 //-------------------------------------------------------------------------------------------------
 void KeyboardOptionsMenuShutdown( WindowLayout *layout, void *userData )
 {
-		// hide menu
+	// The menu opens on top of the options menu and is not part of the shell stack, see closeKeyboardOptionsMenu
 	layout->hide( TRUE );
-
-	// our shutdown is complete
-	TheShell->shutdownComplete( layout );
 }
 
 //-------------------------------------------------------------------------------------------------
-/** options menu update method */
+/** Keyboard options menu update method */
 //-------------------------------------------------------------------------------------------------
 void KeyboardOptionsMenuUpdate( WindowLayout *layout, void *userData )
 {
-
 }
 
 //-------------------------------------------------------------------------------------------------
-/** Options menu input callback */
+/** Keyboard options menu input callback */
 //-------------------------------------------------------------------------------------------------
 WindowMsgHandledType KeyboardOptionsMenuInput( GameWindow *window, UnsignedInt msg,
 																			 WindowMsgData mData1, WindowMsgData mData2 )
 {
+	if (msg != GWM_CHAR)
+		return MSG_IGNORED;
 
-	switch( msg )
+	const UnsignedByte key = (UnsignedByte)mData1;
+	const UnsignedByte state = (UnsignedByte)mData2;
+
+	switch (key)
 	{
-
-		// --------------------------------------------------------------------------------------------
-		case GWM_CHAR:
-		{
-			UnsignedByte key = mData1;
-			UnsignedByte state = mData2;
-
-			switch( key )
-			{
-
-				// ----------------------------------------------------------------------------------------
-				case KEY_ESC:
-				{
-
-					//
-					// send a simulated selected event to the parent window of the
-					// back/exit button
-					//
-					if( BitIsSet( state, KEY_STATE_UP ) )
-					{
-						NameKeyType buttonID = TheNameKeyGenerator->nameToKey( "KeyboardOptionsMenu.wnd:ButtonBack" );
-						GameWindow *button = TheWindowManager->winGetWindowFromId( window, buttonID );
-
-						TheWindowManager->winSendSystemMsg( window, GBM_SELECTED,
-																								(WindowMsgData)button, buttonID );
-
-					}
-
-					// don't let key fall through anywhere else
-					return MSG_HANDLED;
-
-				}
-
-			}
-
-		}
-
+	case KEY_LCTRL:
+	case KEY_RCTRL:
+	case KEY_LSHIFT:
+	case KEY_RSHIFT:
+	case KEY_LALT:
+	case KEY_RALT:
+		// Modifiers are read from the key state when the actual key is pressed.
+		return MSG_HANDLED;
 	}
 
-	return MSG_IGNORED;
+	if (BitIsSet( state, KEY_STATE_UP ))
+	{
+		if (swallowKeyUp == key)
+		{
+			swallowKeyUp = KEY_NONE;
+			return MSG_HANDLED;
+		}
 
+		if (key == KEY_ESC && captureRec == nullptr)
+		{
+			GameWindow *button = TheWindowManager->winGetWindowFromId( window, buttonBackID );
+			TheWindowManager->winSendSystemMsg( window, GBM_SELECTED, (WindowMsgData)button, buttonBackID );
+		}
+
+		return MSG_HANDLED;
+	}
+
+	if (captureRec == nullptr)
+	{
+		// Keep the keys away from the game while the menu is open.
+		return MSG_HANDLED;
+	}
+
+	swallowKeyUp = key;
+
+	Int modState = NONE;
+	if (BitIsSet( state, KEY_STATE_CONTROL ))
+		modState |= CTRL;
+	if (BitIsSet( state, KEY_STATE_ALT ))
+		modState |= ALT;
+	if (BitIsSet( state, KEY_STATE_LSHIFT | KEY_STATE_RSHIFT ))
+		modState |= SHIFT;
+
+	if (key == KEY_ESC && modState == NONE)
+	{
+		captureRec = nullptr;
+		setStatus( TheGameText->FETCH_OR_SUBSTITUTE( "KEYBOARD:Cancelled", L"No change." ) );
+		return MSG_HANDLED;
+	}
+
+	if (!isMappableKey( key ))
+	{
+		setStatus( TheGameText->FETCH_OR_SUBSTITUTE( "KEYBOARD:KeyNotMappable", L"That key cannot be used. Press another key, or Esc to cancel." ) );
+		return MSG_HANDLED;
+	}
+
+	assignCapturedKey( (MappableKeyType)key, (MappableKeyModState)modState );
+	return MSG_HANDLED;
 }
 
 //-------------------------------------------------------------------------------------------------
-/** options menu window system callback */
+/** Keyboard options menu window system callback */
 //-------------------------------------------------------------------------------------------------
 WindowMsgHandledType KeyboardOptionsMenuSystem( GameWindow *window, UnsignedInt msg,
 																				WindowMsgData mData1, WindowMsgData mData2 )
 {
 	switch( msg )
 	{
-
 		// --------------------------------------------------------------------------------------------
 		case GWM_CREATE:
-		{
-
-			break;
-
-		}
-
-		//---------------------------------------------------------------------------------------------
 		case GWM_DESTROY:
-		{
-
 			break;
-
-		}
 
 		// --------------------------------------------------------------------------------------------
 		case GWM_INPUT_FOCUS:
 		{
-
-			// if we're givin the opportunity to take the keyboard focus we must say we want it
+			// if we're given the opportunity to take the keyboard focus we must say we want it
 			if( mData1 == TRUE )
 				*(Bool *)mData2 = TRUE;
 
 			return MSG_HANDLED;
-
-		}
-
-		//---------------------------------------------------------------------------------------------
-		case GCM_SELECTED:
-		{
-			GameWindow *control = (GameWindow *)mData1;
-			Int controlID = control->winGetWindowId();
-
-      if(controlID == comboBoxCategoryListID )
-      {
-        Int selected;
-        GadgetComboBoxGetSelectedPos(comboBoxCategoryList, &selected);
-
-				LookupListRec rec;
-				rec = CategoryListName[selected];
-				MappableKeyCategories cat = (MappableKeyCategories)(rec.value);
-				fillCommandListBox( cat );
-
-				//reset current hotkey description
-				GadgetStaticTextSetText( staticTextDescription, TheGameText->fetch( "GUI:NULL" ) );
-
-				//reset current hotkey text
-				GadgetStaticTextSetText( staticTextCurrentHotkey, TheGameText->fetch( "GUI:NULL" ) );
-
-				//clear textEntry field
-				EntryData *e = (EntryData *)textEntryAssignHotkey->winGetUserData();
-				e->text->setText( UnicodeString::TheEmptyString );
-				e->charPos = e->text->getTextLength();
-
-				//disable textEntry until specific command is chosen
-				textEntryAssignHotkey->winEnable( false );
-
-      }
-			break;
-
 		}
 
 		// ---------------------------------------------------------------------------------------------
 		case GLM_SELECTED:
 		{
 			GameWindow *control = (GameWindow *)mData1;
-			Int controlID = control->winGetWindowId();
-
-			if( controlID == listBoxCommandListID )
+			if( control && control->winGetWindowId() == listBoxCommandListID )
 			{
-				Int selected;
-				GadgetListBoxGetSelected( listBoxCommandList,  &selected );
-				UnicodeString str;
-				str = GadgetListBoxGetText( listBoxCommandList, selected/*, Int column = 0*/ );
-				for(const MetaMapRec *rec = TheMetaMap->getFirstMetaMapRec(); rec; rec = rec->m_next)
-				{
-					if(rec->m_displayName == str)
-					{
-						//set text in description window
-						GadgetStaticTextSetText( staticTextDescription, rec->m_description );
-						//set text in current hotkey text
-						MappableKeyType type = rec->m_key;
-						//enable text entry for assigning different hotkey
-						textEntryAssignHotkey->winEnable( true );
+				captureRec = nullptr;
+				updateDescription();
 
-						for (const LookupListRec* keyName = KeyNames; keyName->name; keyName++)
-						{
-							if( keyName->value == type )
-							{
-								const char *cptr = keyName->name;
-								AsciiString aStr;
-								aStr.format( cptr );
-								UnicodeString uStr;
-								uStr.translate( aStr );
-
-								GadgetStaticTextSetText( staticTextCurrentHotkey, uStr );
-								break;
-							}
-						}
-
-						break;
-					}
-				}
-
+				// The list takes the keyboard focus when clicked. Give it back so key presses reach this menu.
+				TheWindowManager->winSetFocus( parentKeyboardOptionsMenu );
 			}
-
 			break;
+		}
 
+		// ---------------------------------------------------------------------------------------------
+		case GLM_DOUBLE_CLICKED:
+		{
+			GameWindow *control = (GameWindow *)mData1;
+			if( control && control->winGetWindowId() == listBoxCommandListID )
+			{
+				startCapture();
+			}
+			break;
 		}
 
 		// ---------------------------------------------------------------------------------------------
 		case GBM_SELECTED:
 		{
 			GameWindow *control = (GameWindow *)mData1;
-			Int controlID = control->winGetWindowId();
+			const Int controlID = control ? control->winGetWindowId() : NAMEKEY_INVALID;
 
 			if( controlID == buttonBackID )
 			{
-
-				// go back one screen
-				TheShell->pop();
-
+				closeKeyboardOptionsMenu();
 			}
-			else if( controlID == buttonAssignID )
+			else if( controlID == buttonChangeKeyID )
 			{
-				// check grammar in text field
+				startCapture();
+			}
+			else if( controlID == buttonClearKeyID )
+			{
+				captureRec = nullptr;
+				MetaMapRec *rec = getSelectedRec();
+				if (rec)
+				{
+					setRecKey( rec, MK_NONE, NONE );
+					saveChanges();
+					fillCommandList();
+
+					UnicodeString text;
+					text.format( TheGameText->FETCH_OR_SUBSTITUTE( "KEYBOARD:Cleared", L"%ls has no key now." ).str(), getCommandLabel( rec ).str() );
+					setStatus( text );
+				}
+				else
+				{
+					setStatus( TheGameText->FETCH_OR_SUBSTITUTE( "KEYBOARD:SelectCommand", L"Select a command first." ) );
+				}
 			}
 			else if( controlID == buttonResetAllID )
 			{
-				// populate category combo box
-				populateCategoryBox();
-
-				// populate command list
-				fillCommandListBox(CATEGORY_CONTROL);
-
-				//reset current hotkey text
-				GadgetStaticTextSetText( staticTextCurrentHotkey, TheGameText->fetch( "GUI:NULL" ) );
-
-				//clear textEntry field
-				EntryData *e = (EntryData *)textEntryAssignHotkey->winGetUserData();
-				e->text->setText( UnicodeString::TheEmptyString );
-				e->charPos = e->text->getTextLength();
-
-				//set all mods to false
-				setKeyDown(alt, false );
-				setKeyDown(ctrl, false );
-				setKeyDown(shift, false );
-
-				//disable text entry
-				textEntryAssignHotkey->winEnable( false );
-
+				captureRec = nullptr;
+				TheMetaMap->resetToDefaults();
+				saveChanges();
+				fillCommandList();
+				setStatus( TheGameText->FETCH_OR_SUBSTITUTE( "KEYBOARD:ResetDone", L"All hotkeys are back to their defaults." ) );
 			}
 
-			break;
+			if (parentKeyboardOptionsMenu)
+				TheWindowManager->winSetFocus( parentKeyboardOptionsMenu );
 
+			break;
 		}
 
 		default:
 			return MSG_IGNORED;
-
 	}
 
 	return MSG_HANDLED;
-
 }
-
-// KeyboardTextEntryInput =======================================================
-/** Handle input for text entry field */
-//=============================================================================
-WindowMsgHandledType KeyboardTextEntryInput( GameWindow *window, UnsignedInt msg,
-													 WindowMsgData mData1, WindowMsgData mData2 )
-{
-	EntryData *e = (EntryData *)window->winGetUserData();
-
-	WinInstanceData *instData = window->winGetInstanceData();
-
-	if ( TheIMEManager && TheIMEManager->isAttachedTo( window) && TheIMEManager->isComposing())
-	{
-		// ignore input while IME has focus
-		return MSG_HANDLED;
-	}
-
-	switch( msg )
-	{
-		// ------------------------------------------------------------------------
-		case GWM_IME_CHAR:
-		{
-			WideChar ch = (WideChar) mData1;
-
-			// --------------------------------------------------------------------
-			if ( ch == VK_RETURN )
-			{
-				// Done with this edit
-			 		TheWindowManager->winSendSystemMsg( window->winGetOwner(),
-			 																				GEM_EDIT_DONE,
-			 																				(WindowMsgData)window,
-			 																				0 );
-				return MSG_HANDLED;
-			};
-
-			if( ch )
-			{
-				// Constrain keys based on rules for entry box.
-				if( e->numericalOnly )
-				{
-					if( TheWindowManager->winIsDigit( ch ) == 0 )
-						return MSG_HANDLED;
-				}
-				else if( e->alphaNumericalOnly )
-				{
-					if( TheWindowManager->winIsAlNum( ch ) == 0 )
-						return MSG_HANDLED;
-				}
-				else if ( e->aSCIIOnly )
-				{
-					if ( TheWindowManager->winIsAscii( ch ) == 0 )
-					{
-						return MSG_HANDLED;
-					}
-				}
-
-				if( e->text->getTextLength() <= 1 )
-				{
-					e->text->setText( UnicodeString::TheEmptyString );
-					e->text->appendChar( ch );
-					e->charPos = e->text->getTextLength();
-					TheWindowManager->winSendSystemMsg( window->winGetOwner(),
-																					GEM_UPDATE_TEXT,
-																					(WindowMsgData)window,
-																					0 );
-					return MSG_HANDLED;
-				}
-				//else check if modifiers are present
-				else
-				{
-					char c = e->text->getText().getCharAt(e->text->getTextLength() - 1 );
-					if(c == '+' )
-					{
-						e->text->appendChar( ch );
-						e->charPos++;
-						TheWindowManager->winSendSystemMsg( window->winGetOwner(),
-																						GEM_UPDATE_TEXT,
-																						(WindowMsgData)window,
-																						0 );
-						return MSG_HANDLED;
-					}
-					// if not, reset textEntry
-					else
-					{
-						//if any of the modifiers are down, just replace letter
-						if( ( shiftDown | ctrlDown | altDown ) && ( !absolute ) )
-						{
-							char test = e->text->getText().getCharAt(e->text->getTextLength() - 1);
-							// only replace letter if not the same as last char of string (removes flickering)
-							if( test != ch )
-							{
-								e->text->removeLastChar();
-								e->text->appendChar( ch );
-								TheWindowManager->winSendSystemMsg( window->winGetOwner(),
-																								GEM_UPDATE_TEXT,
-																								(WindowMsgData)window,
-																								0 );
-							}
-						}
-						//else reset textEntry
-						else
-						{
-							e->text->setText( UnicodeString::TheEmptyString );
-							e->text->appendChar( ch );
-							e->charPos = 1;
-							TheWindowManager->winSendSystemMsg( window->winGetOwner(),
-																							GEM_UPDATE_TEXT,
-																							(WindowMsgData)window,
-																							0 );
-						}
-						return MSG_HANDLED;
-					}
-				}
-
-
-			}
-			break;
-		}
-		// ------------------------------------------------------------------------
-		case GWM_CHAR:
-
-			switch( mData1 )
-			{
-				/*
-				// --------------------------------------------------------------------
-				case KEY_KPENTER:
-				case KEY_ENTER:
-					// Done with this edit
-					if( BitIsSet( mData2, KEY_STATE_DOWN ) )
-					{
-						if( e->receivedUnichar == FALSE )
-						{
-							TheWindowManager->winSendSystemMsg( window->winGetOwner(),
-																									GEM_EDIT_DONE,
-																									(WindowMsgData)window,
-																									0 );
-						}
-					}
-
-					break;
-				 */
-
-				// -------------------------------------------------------------------------------------------
-				// modifier cases
-
-				case KEY_LCTRL:
-				{
-					if( BitIsSet( mData2, KEY_STATE_DOWN ) )
-					{
-						UnicodeString mod = ctrl;
-						doKeyDown( e, mod );
-						TheWindowManager->winSendSystemMsg( window->winGetOwner(),
-																GEM_UPDATE_TEXT,
-																(WindowMsgData)window,
-																0 );
-
-						return MSG_HANDLED;
-					}
-					if( BitIsSet(mData2, KEY_STATE_UP ) )
-					{
-							UnicodeString mod = ctrl;
-							doKeyUp( e, mod );
-							TheWindowManager->winSendSystemMsg( window->winGetOwner(),
-																						GEM_UPDATE_TEXT,
-																						(WindowMsgData)window,
-																						0 );
-
-							return MSG_HANDLED;
-					}
-					break;
-				}
-
-				case KEY_RSHIFT:
-				case KEY_LSHIFT:
-				{
-					if( BitIsSet( mData2, KEY_STATE_DOWN ) )
-					{
-						UnicodeString mod = shift;
-						doKeyDown( e, mod );
-						TheWindowManager->winSendSystemMsg( window->winGetOwner(),
-																GEM_UPDATE_TEXT,
-																(WindowMsgData)window,
-																0 );
-
-						return MSG_HANDLED;
-
-					}
-					if( BitIsSet( mData2, KEY_STATE_UP ) )
-					{
-						UnicodeString mod = shift;
-						doKeyUp(e, mod );
-
-						TheWindowManager->winSendSystemMsg( window->winGetOwner(),
-																						GEM_UPDATE_TEXT,
-																						(WindowMsgData)window,
-																						0 );
-
-
-						return MSG_HANDLED;
-					}
-					break;
-				}
-
-				case KEY_LALT:
-				{
-					if( BitIsSet( mData2, KEY_STATE_DOWN ) )
-					{
-						UnicodeString mod = alt;
-						doKeyDown( e, mod );
-
-						TheWindowManager->winSendSystemMsg( window->winGetOwner(),
-																GEM_UPDATE_TEXT,
-																(WindowMsgData)window,
-																0 );
-
-						return MSG_HANDLED;
-
-					}
-					if( BitIsSet(mData2, KEY_STATE_UP ) )
-					{
-						UnicodeString mod = alt;
-						doKeyUp( e, mod );
-						TheWindowManager->winSendSystemMsg( window->winGetOwner(),
-																GEM_UPDATE_TEXT,
-																(WindowMsgData)window,
-																0 );
-
-						return MSG_HANDLED;
-					}
-					break;
-				}
-
-				// -------------------------------------------------------------------------------------------
-
-
-				// --------------------------------------------------------------------
-				// Don't process these keys
-				case KEY_ESC:
-				case KEY_PGUP:
-				case KEY_PGDN:
-				case KEY_HOME:
-				case KEY_END:
-				case KEY_F1:
-				case KEY_F2:
-				case KEY_F3:
-				case KEY_F4:
-				case KEY_F5:
-				case KEY_F6:
-				case KEY_F7:
-				case KEY_F8:
-				case KEY_F9:
-				case KEY_F10:
-				case KEY_F11:
-				case KEY_F12:
-				case KEY_CAPS:
-					return MSG_IGNORED;
-
-				// --------------------------------------------------------------------
-				case KEY_DOWN:
-				case KEY_RIGHT:
-				case KEY_TAB:
-
-					if( BitIsSet( mData2, KEY_STATE_DOWN ) )
-						window->winNextTab();
-					break;
-
-				// --------------------------------------------------------------------
-				case KEY_UP:
-				case KEY_LEFT:
-
-					if( BitIsSet( mData2, KEY_STATE_DOWN ) )
-						window->winPrevTab();
-					break;
-
-				// --------------------------------------------------------------------
-				case KEY_BACKSPACE:
-				{
-					e->text->setText( UnicodeString::TheEmptyString );
-					e->charPos = e->text->getTextLength();
-					TheWindowManager->winSendSystemMsg( window->winGetOwner(),
-																					GEM_UPDATE_TEXT,
-																					(WindowMsgData)window,
-																					0 );
-					setKeyDown(shift, false );
-					setKeyDown(ctrl, false );
-					setKeyDown(alt, false );
-					return MSG_HANDLED;
-
-					break;
-				}
-				case KEY_DEL:
-				{
-
-					if( BitIsSet( mData2, KEY_STATE_DOWN ) )
-					{
-						// if conCharPos != 0 this will fall through to next case.
-						// it should be noted that conCharPos can only != 0 in Jap & Kor
-						if( e->conCharPos == 0 )
-						{
-							if( e->charPos > 0 )
-							{
-
-								e->text->removeLastChar();
-								e->sText->removeLastChar();
-								e->charPos--;
-								TheWindowManager->winSendSystemMsg( window->winGetOwner(),
-																								GEM_UPDATE_TEXT,
-																								(WindowMsgData)window,
-																								0 );
-							}
-						}
-					}
-					break;
-				}
-
-				// ----------------------------------------------------------------------------------------
-				// doing research to see if this will fix the keyboard stuff
-				/*default:
-				{
-					char ch = mData1;
-					if( ch && ( BitIsSet( mData2, KEY_STATE_DOWN ) ) )
-					{
-						// Constrain keys based on rules for entry box.
-						if( e->numericalOnly )
-						{
-							if( TheWindowManager->winIsDigit( ch ) == 0 )
-								return MSG_HANDLED;
-						}
-						else if( e->alphaNumericalOnly )
-						{
-							if( TheWindowManager->winIsAlNum( ch ) == 0 )
-								return MSG_HANDLED;
-						}
-						else if ( e->aSCIIOnly )
-						{
-							if ( TheWindowManager->winIsAscii( ch ) == 0 )
-							{
-								return MSG_HANDLED;
-							}
-						}
-
-						if( e->text->getTextLength() <= 1 )
-						{
-							e->text->setText( UnicodeString::TheEmptyString );
-							e->text->appendChar( ch );
-							e->charPos = e->text->getTextLength();
-							TheWindowManager->winSendSystemMsg( window->winGetOwner(),
-																							GEM_UPDATE_TEXT,
-																							(WindowMsgData)window,
-																							0 );
-							return MSG_HANDLED;
-						}
-						//else check if modifiers are present
-						else
-						{
-							char c = e->text->getText().getCharAt(e->text->getTextLength() - 1 );
-							if(c == '+' )
-							{
-								e->text->appendChar( ch );
-								e->charPos++;
-								TheWindowManager->winSendSystemMsg( window->winGetOwner(),
-																								GEM_UPDATE_TEXT,
-																								(WindowMsgData)window,
-																								0 );
-								return MSG_HANDLED;
-							}
-							// if not, reset textEntry
-							else
-							{
-								//if any of the modifiers are down, just replace letter
-								if( ( shiftDown | ctrlDown | altDown ) && ( !absolute ) )
-								{
-									char test = e->text->getText().getCharAt(e->text->getTextLength() - 1);
-									// only replace letter if not the same as last char of string (removes flickering)
-									if( test != ch )
-									{
-										e->text->removeLastChar();
-										e->text->appendChar( ch );
-										TheWindowManager->winSendSystemMsg( window->winGetOwner(),
-																										GEM_UPDATE_TEXT,
-																										(WindowMsgData)window,
-																										0 );
-									}
-								}
-								//else reset textEntry
-								else
-								{
-									e->text->setText( UnicodeString::TheEmptyString );
-									e->text->appendChar( ch );
-									e->charPos = 1;
-									TheWindowManager->winSendSystemMsg( window->winGetOwner(),
-																									GEM_UPDATE_TEXT,
-																									(WindowMsgData)window,
-																									0 );
-								}
-								return MSG_HANDLED;
-							}
-						}
-
-
-					}
-				}*/
-
-
-			}
-
-			break;
-
-		// ------------------------------------------------------------------------
-		case GWM_LEFT_DOWN:
-			BitSet( instData->m_state, WIN_STATE_HILITED );
-			TheWindowManager->winSetFocus( window );
-			break;
-
-		// ------------------------------------------------------------------------
-		case GWM_MOUSE_ENTERING:
-
-			if (BitIsSet( instData->getStyle(), GWS_MOUSE_TRACK ) )
-			{
-
-				BitSet( instData->m_state, WIN_STATE_HILITED );
-				TheWindowManager->winSendSystemMsg( window->winGetOwner(),
-																						GBM_MOUSE_ENTERING,
-																						(WindowMsgData)window, 0 );
-				TheWindowManager->winSetFocus( window );
-			}
-
-			break;
-
-		// ------------------------------------------------------------------------
-		case GWM_MOUSE_LEAVING:
-
-			if( BitIsSet( instData->getStyle(), GWS_MOUSE_TRACK ) )
-			{
-
-				BitClear( instData->m_state, WIN_STATE_HILITED );
-				TheWindowManager->winSendSystemMsg( window->winGetOwner(),
-																						GBM_MOUSE_LEAVING,
-																						(WindowMsgData)window, 0 );
-			}
-			break;
-
-		// ------------------------------------------------------------------------
-		case GWM_LEFT_DRAG:
-
-			if( BitIsSet( instData->getStyle(), GWS_MOUSE_TRACK ) )
-				TheWindowManager->winSendSystemMsg( window->winGetOwner(),
-																						GGM_LEFT_DRAG,
-																						(WindowMsgData)window, 0 );
-			break;
-
-		// ------------------------------------------------------------------------
-		default:
-			return MSG_IGNORED;
-
-	}
-
-	return MSG_HANDLED;
-
-}
-
-

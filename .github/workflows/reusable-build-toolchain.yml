@@ -198,6 +198,12 @@ jobs:
 
           $files | Move-Item -Destination $artifactsDir -Verbose -Force
 
+          # Game data files that the fork adds, such as new window layouts, go next to the executable.
+          $gameDataDir = "${{ inputs.game }}\GameData"
+          if (Test-Path $gameDataDir) {
+            Copy-Item -Path "$gameDataDir\*" -Destination $artifactsDir -Recurse -Force -Verbose
+          }
+
       - name: Upload ${{ inputs.game }} ${{ inputs.preset }}${{ inputs.tools && '+t' || '' }}${{ inputs.extras && '+e' || '' }} Artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:

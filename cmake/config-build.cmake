@@ -8,6 +8,7 @@ option(RTS_BUILD_OPTION_PROFILE_TRACY "Build code with Tracy profiling enabled."
 option(RTS_BUILD_OPTION_DEBUG "Build code with the \"Debug\" configuration." OFF)
 option(RTS_BUILD_OPTION_ASAN "Build code with Address Sanitizer." OFF)
 option(RTS_BUILD_OPTION_VC6_FULL_DEBUG "Build VC6 with full debug info." OFF)
+option(RTS_BUILD_OPTION_MINIAUDIO "Play sound through miniaudio instead of loading mss32.dll." ON)
 cmake_dependent_option(RTS_BUILD_OPTION_TESTS "Build the unit tests." OFF "NOT IS_VS6_BUILD" OFF)
 cmake_dependent_option(RTS_BUILD_OPTION_BENCHMARKS "Build the benchmarks." OFF "NOT IS_VS6_BUILD" OFF)
 
@@ -24,6 +25,7 @@ add_feature_info(ProfileBuild RTS_BUILD_OPTION_PROFILE "Building as a \"Profile\
 add_feature_info(DebugBuild RTS_BUILD_OPTION_DEBUG "Building as a \"Debug\" build")
 add_feature_info(AddressSanitizer RTS_BUILD_OPTION_ASAN "Building with address sanitizer")
 add_feature_info(Vc6FullDebug RTS_BUILD_OPTION_VC6_FULL_DEBUG "Building VC6 with full debug info")
+add_feature_info(Miniaudio RTS_BUILD_OPTION_MINIAUDIO "Playing sound through miniaudio")
 add_feature_info(FFmpegSupport RTS_BUILD_OPTION_FFMPEG "Building with FFmpeg support")
 add_feature_info(Tests RTS_BUILD_OPTION_TESTS "Building the unit tests")
 add_feature_info(Benchmarks RTS_BUILD_OPTION_BENCHMARKS "Building the benchmarks")

@@ -429,8 +429,8 @@ static UnicodeString matchLabelCase( const UnicodeString &text, GameWindow *refe
 		return text;
 
 	UnicodeString upper;
-	for (const WideChar *c = text.str(); *c != 0; ++c)
-		upper.concat( (WideChar)towupper( *c ) );
+	for (const WideChar *ch = text.str(); *ch != 0; ++ch)
+		upper.concat( (WideChar)towupper( *ch ) );
 	return upper;
 }
 

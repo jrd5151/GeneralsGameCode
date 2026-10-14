@@ -47,6 +47,7 @@
 #include "GameClient/WindowLayout.h"
 #include "GameClient/Gadget.h"
 #include "GameClient/GameText.h"
+#include "GameClient/GUICallbacks.h"
 #include "GameClient/HeaderTemplate.h"
 #include "GameClient/MapUtil.h"
 #include "GameClient/Shell.h"
@@ -165,6 +166,7 @@ static GameWindow *buttonReplay = nullptr;
 static GameWindow *buttonLoadReplay = nullptr;
 static GameWindow *buttonLoad = nullptr;
 static GameWindow *buttonCredits = nullptr;
+static GameWindow *buttonMods = nullptr;
 static GameWindow *buttonEasy = nullptr;
 static GameWindow *buttonMedium = nullptr;
 static GameWindow *buttonHard = nullptr;
@@ -405,6 +407,53 @@ GameWindow *win = nullptr;
 
 }
 
+//-------------------------------------------------------------------------------------------------
+/** TheSuperHackers @feature Adds a Mods button to the main list, between Options and Credits. Credits
+	* and Exit move down one place and the panel behind the list grows to fit. */
+//-------------------------------------------------------------------------------------------------
+static void initButtonMods()
+{
+	static const char *const buttonModsName = "MainMenu.wnd:ButtonMods";
+
+	buttonMods = TheWindowManager->winGetWindowFromId( parentMainMenu, TheNameKeyGenerator->nameToKey( buttonModsName ) );
+	if (buttonMods != nullptr)
+		return;
+
+	GameWindow *mainPanel = dropDownWindows[DROPDOWN_MAIN];
+	if (buttonOptions == nullptr || buttonCredits == nullptr || buttonExit == nullptr || mainPanel == nullptr)
+		return;
+
+	Int optionsX, optionsY, creditsX, creditsY;
+	buttonOptions->winGetPosition( &optionsX, &optionsY );
+	buttonCredits->winGetPosition( &creditsX, &creditsY );
+	const Int step = creditsY - optionsY;
+	if (step <= 0)
+		return;
+
+	Int width, height;
+	buttonOptions->winGetSize( &width, &height );
+
+	Int x, y;
+	buttonExit->winGetPosition( &x, &y );
+	buttonExit->winSetPosition( x, y + step );
+	buttonCredits->winSetPosition( creditsX, creditsY + step );
+
+	for (GameWindow *panel = buttonOptions->winGetParent(); panel != nullptr && panel != parentMainMenu; panel = panel->winGetParent())
+	{
+		Int panelWidth, panelHeight;
+		panel->winGetSize( &panelWidth, &panelHeight );
+		panel->winSetSize( panelWidth, panelHeight + step );
+		if (panel == mainPanel)
+			break;
+	}
+
+	buttonMods = CreateLookAlikeButton( buttonOptions, buttonModsName, TheGameText->FETCH_OR_SUBSTITUTE( "GUI:ModMenu", L"Mods" ),
+		optionsX, creditsY, width, height );
+
+	// The button flashes in and out with the others.
+	TheTransitionHandler->copyWindowTransitions( "MainMenu.wnd:ButtonCredits", buttonModsName );
+}
+
 // TheSuperHackers @tweak Now prints version information in an optional version label.
 // Originally this label does not exist in the Main Menu. It can be copied from the Options Menu.
 static void initLabelVersion()
@@ -524,6 +573,8 @@ void MainMenuInit( WindowLayout *layout, void *userData )
 	dropDownWindows[DROPDOWN_DIFFICULTY] = TheWindowManager->winGetWindowFromId( parentMainMenu, TheNameKeyGenerator->nameToKey( "MainMenu.wnd:MapBorder4" ) );
 	for(i = 1; i < DROPDOWN_COUNT; ++i)
 		dropDownWindows[i]->winHide(TRUE);
+
+	initButtonMods();
 
 	initialHide();
 
@@ -1327,6 +1378,13 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 				TheTransitionHandler->setGroup("MainMenuDefaultMenu");
 			}
 
+			else if( buttonMods != nullptr && control == buttonMods )
+			{
+				// TheSuperHackers @feature The mod menu opens on top of the main menu. Changing the mod restarts the game.
+				if(dontAllowTransitions || buttonPushed)
+					break;
+				ModMenuOpen();
+			}
 			else if( control == buttonCredits )
 			{
 				if(dontAllowTransitions)

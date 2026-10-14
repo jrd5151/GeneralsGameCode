@@ -640,6 +640,7 @@ public:
 	AsciiString getName() { return m_name; }
 	void setName( AsciiString name){ m_name = name;	}
 	void addWindow( TransitionWindow *transWin );
+	void copyWindowTransitions( const AsciiString &fromWinName, const AsciiString &toWinName );
 	Bool isReversed();
 	Bool isFireOnce() { return m_fireOnce; }
 	Bool m_fireOnce;
@@ -672,6 +673,10 @@ public:
 	void reverse( AsciiString groupName );// reverse the animations for the current group.
 	void remove( AsciiString groupName, Bool skipPending = FALSE );// remove the animation from the current or pending groups.
 	TransitionGroup *getNewGroup( AsciiString name );
+
+	// TheSuperHackers @feature Gives a window the original layouts do not have the transitions of another window,
+	// in every group that has them. A window that already has transitions in a group keeps them.
+	void copyWindowTransitions( const AsciiString &fromWinName, const AsciiString &toWinName );
 private:
 	TransitionGroup *findGroup( AsciiString groupName );
 	typedef std::list<TransitionGroup *> TransitionGroupList;

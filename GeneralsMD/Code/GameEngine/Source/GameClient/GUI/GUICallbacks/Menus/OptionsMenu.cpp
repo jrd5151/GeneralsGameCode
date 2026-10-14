@@ -903,6 +903,41 @@ static void saveOptions()
 	// MUST NEVER ADD ANOTHER OPTION HERE AT THE END !
 }
 
+//-------------------------------------------------------------------------------------------------
+/** TheSuperHackers @feature Creates the Mods button. The original layout has no such button, so it
+	* takes the look of the keyboard button next to it. */
+//-------------------------------------------------------------------------------------------------
+static void createModMenuButton( GameWindow *lookAlike, Int x, Int y, Int width, Int height )
+{
+	const NameKeyType buttonModMenuID = TheNameKeyGenerator->nameToKey( "OptionsMenu.wnd:ButtonModMenu" );
+	if (TheWindowManager->winGetWindowFromId( nullptr, buttonModMenuID ) != nullptr)
+		return;
+
+	WinInstanceData *source = lookAlike->winGetInstanceData();
+
+	WinInstanceData instData;
+	instData.init();
+	instData.m_style = GWS_PUSH_BUTTON | GWS_MOUSE_TRACK;
+	instData.m_decoratedNameString = "OptionsMenu.wnd:ButtonModMenu";
+	instData.m_id = (Int)buttonModMenuID;
+	instData.m_font = lookAlike->winGetFont();
+	for (Int i = 0; i < MAX_DRAW_DATA; ++i)
+	{
+		instData.m_enabledDrawData[i] = source->m_enabledDrawData[i];
+		instData.m_disabledDrawData[i] = source->m_disabledDrawData[i];
+		instData.m_hiliteDrawData[i] = source->m_hiliteDrawData[i];
+	}
+	instData.m_enabledText = source->m_enabledText;
+	instData.m_disabledText = source->m_disabledText;
+	instData.m_hiliteText = source->m_hiliteText;
+
+	GameWindow *button = TheWindowManager->gogoGadgetPushButton( lookAlike->winGetParent(),
+		WIN_STATUS_ENABLED | WIN_STATUS_IMAGE, x, y, width, height, &instData, instData.m_font, FALSE );
+
+	if (button)
+		GadgetButtonSetText( button, TheGameText->FETCH_OR_SUBSTITUTE( "GUI:ModMenu", L"Mods" ) );
+}
+
 static void DestroyOptionsLayout() {
 
 	SignalUIInteraction(SHELL_SCRIPT_HOOK_OPTIONS_CLOSED);
@@ -1395,11 +1430,21 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 			if (buttonKeyboard->winGetParent())
 				buttonKeyboard->winGetParent()->winGetScreenPosition( &parentX, &parentY );
 
+			// TheSuperHackers @feature The mods button shares the row in the menus. Changing the mod restarts the game,
+			// so it is not offered during a match.
+			const Bool showModButton = !TheGameLogic->isInGame() || TheGameLogic->isInShellGame();
+			const Int buttonGap = 6;
+			const Int keyboardWidth = showModButton ? (columnWidth - buttonGap) / 2 : columnWidth;
+
 			buttonKeyboard->winSetPosition( columnX - parentX, rowY - parentY + 1 );
-			buttonKeyboard->winSetSize( columnWidth, rowHeight - 2 );
+			buttonKeyboard->winSetSize( keyboardWidth, rowHeight - 2 );
 			buttonKeyboard->winSetFont( checkRetaliation->winGetFont() );
 			GadgetButtonSetText( buttonKeyboard, TheGameText->FETCH_OR_SUBSTITUTE( "GUI:KeyboardOptions", L"Keyboard Hotkeys" ) );
 			buttonKeyboard->winHide( FALSE );
+
+			if (showModButton)
+				createModMenuButton( buttonKeyboard, columnX - parentX + keyboardWidth + buttonGap, rowY - parentY + 1,
+					columnWidth - keyboardWidth - buttonGap, rowHeight - 2 );
 		}
 	}
 
@@ -1692,6 +1737,16 @@ WindowMsgHandledType OptionsMenuSystem( GameWindow *window, UnsignedInt msg,
 			else if (controlID == ButtonAdvancedCancelID )
 			{
 				cancelAdvancedOptions();
+			}
+			else if ( controlID == (Int)TheNameKeyGenerator->nameToKey( "OptionsMenu.wnd:ButtonModMenu" ) )
+			{
+				// TheSuperHackers @feature The mod menu opens on top of the options menu, like the hotkey menu.
+				WindowLayout *modLayout = TheWindowManager->winCreateLayout( "Menus/ModMenu.wnd" );
+				if (modLayout)
+				{
+					modLayout->runInit();
+					modLayout->bringForward();
+				}
 			}
 			else if ( controlID == buttonKeyboardOptionsMenu )
 			{

@@ -39,4 +39,8 @@ public:
 	// Returns true if command-line parsing consumed the zero-based argument index.
 	// The index excludes the executable name.
 	static bool wasCommandLineArgumentParsed(int argIndex);
+
+	// TheSuperHackers @feature Sets the mod folder or BIG file to load, like -mod does.
+	// A relative path is relative to the user data folder. Returns false if the path does not exist.
+	static bool applyModPath(const char *path);
 };

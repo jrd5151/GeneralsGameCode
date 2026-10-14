@@ -133,4 +133,5 @@ public:
 	Real getGameWindowTransitionSpeedMultiplier() const;
 
 	Real getCameraHeightScale() const;
+	AsciiString getSelectedMod() const; ///< TheSuperHackers @feature The mod picked in the mod menu, relative to the user data folder. Empty for none.
 };

@@ -472,6 +472,17 @@ void GameEngine::init()
 		// special-case: parse command-line parameters after loading global data
 		CommandLine::parseCommandLineForEngineInit();
 
+		// TheSuperHackers @feature Load the mod picked in the mod menu, unless -mod was given.
+		if (TheGlobalData->m_modDir.isEmpty() && TheGlobalData->m_modBIG.isEmpty())
+		{
+			OptionPreferences optionPref;
+			const AsciiString selectedMod = optionPref.getSelectedMod();
+			if (selectedMod.isNotEmpty() && !CommandLine::applyModPath(selectedMod.str()))
+			{
+				DEBUG_LOG(("GameEngine::init - selected mod '%s' was not found, starting without it", selectedMod.str()));
+			}
+		}
+
 		TheArchiveFileSystem->loadMods();
 
 		// doesn't require resets so just create a single instance here.

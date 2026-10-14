@@ -70,6 +70,7 @@
 #include "GameClient/GadgetSlider.h"
 #include "GameClient/GameText.h"
 #include "GameClient/HeaderTemplate.h"
+#include "GameClient/GlobalLanguage.h"
 #include "GameClient/HudLayout.h"
 
 
@@ -525,6 +526,9 @@ static Bool parseTooltip( const char *token, WinInstanceData *instData,
 // The anchor of the layout that winCreateFromScript is loading right now.
 static hud::Anchor s_layoutAnchor = hud::Anchor_None;
 
+// The side each window of the layout being loaded took, by its depth in the window stack.
+static hud::Side s_sideByDepth[ WIN_STACK_DEPTH ];
+
 // Sets s_layoutAnchor for the layout being loaded, and puts the previous one back when done.
 class ScopedLayoutAnchor
 {
@@ -578,14 +582,11 @@ static Bool parseScreenRect( const char *token, char *buffer,
 	// shrink or expand the screen region by the ratio of the current
 	// resolution divided by the creation resolution
 	//
-	// TheSuperHackers @feature HUD layouts scale uniformly and are anchored instead, see HudLayout.h
-	Coord2D scale;
-	ICoord2D offset;
-	hud::getTransform( s_layoutAnchor, createRes.x, createRes.y, &scale, &offset );
-	screenRegion.lo.x = (Int)((Real)screenRegion.lo.x * scale.x) + offset.x;
-	screenRegion.lo.y = (Int)((Real)screenRegion.lo.y * scale.y) + offset.y;
-	screenRegion.hi.x = (Int)((Real)screenRegion.hi.x * scale.x) + offset.x;
-	screenRegion.hi.y = (Int)((Real)screenRegion.hi.y * scale.y) + offset.y;
+	// TheSuperHackers @feature HUD and menu layouts scale uniformly and are anchored instead, see HudLayout.h
+	// Each window remembers its side at its depth in the window stack, for its children to follow.
+	const Int depth = (Int)(stackPtr - windowStack);
+	const hud::Side parentSide = (parent && depth > 0) ? s_sideByDepth[ depth - 1 ] : hud::Side_Auto;
+	s_sideByDepth[ depth ] = hud::transformRect( s_layoutAnchor, createRes.x, createRes.y, &screenRegion, parentSide );
 
 	//
 	// given the screen region upper left compute the upper left that we
@@ -2496,6 +2497,19 @@ static GameWindow *parseWindow( File *inFile, char *buffer )
 				// Check to see if we have a header template, if so, set the font equal to that.
 				if(TheHeaderTemplateManager->getFontFromTemplate(instData.m_headerTemplateName))
 					instData.m_font = TheHeaderTemplateManager->getFontFromTemplate(instData.m_headerTemplateName);
+
+				// TheSuperHackers @feature A smaller HUD gets smaller text to match.
+				if( hud::isHudAnchor( s_layoutAnchor ) && hud::getHudSizePercent() < hud::HudSizePercentMax )
+				{
+					HeaderTemplate *headerTemplate = TheHeaderTemplateManager->findHeaderTemplate( instData.m_headerTemplateName );
+					if( headerTemplate && TheGlobalLanguageData && TheFontLibrary )
+					{
+						const Int pointSize = TheGlobalLanguageData->adjustFontSize( headerTemplate->m_point ) * hud::getHudSizePercent() / 100;
+						GameFont *font = TheFontLibrary->getFont( headerTemplate->m_fontName, max( pointSize, 6 ), headerTemplate->m_bold );
+						if( font )
+							instData.m_font = font;
+					}
+				}
 
 				// Create a window using the current description
 				if( window == nullptr )

@@ -47,6 +47,7 @@
 #include "GameClient/GadgetProgressBar.h"
 #include "GameClient/GadgetStaticText.h"
 #include "GameClient/Display.h"
+#include "GameClient/HudLayout.h"
 #include "GameClient/MessageBox.h"
 #include "GameNetwork/GameSpyOverlay.h"
 #include "GameNetwork/GameSpy/PeerDefs.h"
@@ -469,8 +470,10 @@ void ResetBattleHonorInsertion()
 }
 void InsertBattleHonor(GameWindow *list, const Image *image, Bool enabled, Int itemData, Int& row, Int& column, UnicodeString text = UnicodeString::TheEmptyString, Int extra = 0)
 {
-	Int width = MAX_BATTLE_HONOR_IMAGE_WIDTH * (TheDisplay->getWidth() / (Real)DEFAULT_DISPLAY_WIDTH);
-	Int height = MAX_BATTLE_HONOR_IMAGE_HEIGHT * (TheDisplay->getHeight() / (Real)DEFAULT_DISPLAY_HEIGHT);
+	// TheSuperHackers @feature Match the list's own scale when menus keep their shape.
+	const Coord2D menuScale = hud::getMenuScale();
+	Int width = MAX_BATTLE_HONOR_IMAGE_WIDTH * menuScale.x;
+	Int height = MAX_BATTLE_HONOR_IMAGE_HEIGHT * menuScale.y;
 
 	static Int enabledColor = 0xFFFFFFFF;
 	static Int disabledColor = GameMakeColor(80, 80, 80, 255);

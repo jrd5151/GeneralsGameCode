@@ -39,6 +39,7 @@
 
 #include "GameClient/ClientInstance.h"
 #include "GameClient/Display.h"
+#include "GameClient/HudLayout.h"
 #include "GameClient/LookAtXlat.h"
 #include "GameClient/Mouse.h"
 
@@ -917,6 +918,29 @@ Bool OptionPreferences::getCenteredHud() const
 		return FALSE;
 	}
 	return TRUE;
+}
+
+Bool OptionPreferences::getKeepMenuShape() const
+{
+	OptionPreferences::const_iterator it = find("KeepMenuShape");
+	if (it == end())
+		return TRUE;
+
+	if (stricmp(it->second.str(), "no") == 0)
+	{
+		return FALSE;
+	}
+	return TRUE;
+}
+
+Int OptionPreferences::getHudSizePercent() const
+{
+	OptionPreferences::const_iterator it = find("HudSize");
+	if (it == end())
+		return hud::HudSizePercentMax;
+
+	Int percent = atoi(it->second.str());
+	return clamp((Int)hud::HudSizePercentMin, percent, (Int)hud::HudSizePercentMax);
 }
 
 AsciiString OptionPreferences::getSelectedMod() const

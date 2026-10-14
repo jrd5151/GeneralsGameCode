@@ -470,7 +470,7 @@ void ResetBattleHonorInsertion()
 }
 void InsertBattleHonor(GameWindow *list, const Image *image, Bool enabled, Int itemData, Int& row, Int& column, UnicodeString text = UnicodeString::TheEmptyString, Int extra = 0)
 {
-	// TheSuperHackers @feature Match the list's own scale when menus are centered.
+	// TheSuperHackers @feature Match the list's own scale when menus keep their shape.
 	const Coord2D menuScale = hud::getMenuScale();
 	Int width = MAX_BATTLE_HONOR_IMAGE_WIDTH * menuScale.x;
 	Int height = MAX_BATTLE_HONOR_IMAGE_HEIGHT * menuScale.y;

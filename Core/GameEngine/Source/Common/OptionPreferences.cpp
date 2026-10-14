@@ -920,9 +920,9 @@ Bool OptionPreferences::getCenteredHud() const
 	return TRUE;
 }
 
-Bool OptionPreferences::getCenteredMenus() const
+Bool OptionPreferences::getKeepMenuShape() const
 {
-	OptionPreferences::const_iterator it = find("CenteredMenus");
+	OptionPreferences::const_iterator it = find("KeepMenuShape");
 	if (it == end())
 		return TRUE;
 

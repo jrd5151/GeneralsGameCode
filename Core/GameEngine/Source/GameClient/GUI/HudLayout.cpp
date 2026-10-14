@@ -35,7 +35,7 @@ namespace
 
 Bool s_settingsRead = FALSE;
 Bool s_centeredHud = FALSE;
-Bool s_centeredMenus = FALSE;
+Bool s_keepMenuShape = FALSE;
 Int s_hudSizePercent = HudSizePercentMax;
 
 struct LayoutAnchor
@@ -53,7 +53,7 @@ const LayoutAnchor s_hudLayouts[] =
 	{ "GenPowersShortcutBar*", Anchor_TopRight },
 };
 
-// Layouts that keep stretching even with centered menus: their code places them on screen itself.
+// Layouts that keep stretching even when menus keep their shape: their code places them on screen itself.
 const char *const s_stretchedLayouts[] =
 {
 	"InGamePopupMessage.wnd",
@@ -89,7 +89,7 @@ Bool readSettings()
 		OptionPreferences pref;
 		const Bool addonUi = addon::HasFullviewportDat();
 		s_centeredHud = pref.getCenteredHud() && !addonUi;
-		s_centeredMenus = pref.getCenteredMenus() && !addonUi;
+		s_keepMenuShape = pref.getKeepMenuShape() && !addonUi;
 		s_hudSizePercent = pref.getHudSizePercent();
 		s_settingsRead = TRUE;
 	}
@@ -106,9 +106,9 @@ Bool isCenteredHudEnabled()
 	return readSettings() && s_centeredHud;
 }
 
-Bool isCenteredMenusEnabled()
+Bool isMenuShapeKept()
 {
-	return readSettings() && s_centeredMenus;
+	return readSettings() && s_keepMenuShape;
 }
 
 Int getHudSizePercent()
@@ -141,7 +141,7 @@ Anchor getLayoutAnchor(const char *layoutFilename)
 			return isCenteredHudEnabled() ? s_hudLayouts[i].anchor : Anchor_None;
 	}
 
-	if (!isCenteredMenusEnabled())
+	if (!isMenuShapeKept())
 		return Anchor_None;
 
 	for (i = 0; i < ARRAY_SIZE(s_stretchedLayouts); ++i)
@@ -199,31 +199,67 @@ Bool getTransform(Anchor anchor, Int creationResX, Int creationResY, Coord2D *sc
 	return TRUE;
 }
 
-void transformRect(Anchor anchor, Int creationResX, Int creationResY, IRegion2D *rect)
+Side transformRect(Anchor anchor, Int creationResX, Int creationResY, IRegion2D *rect, Side parentSide)
 {
 	Coord2D scale;
 	ICoord2D offset;
 	getTransform(anchor, creationResX, creationResY, &scale, &offset);
 
+	if (anchor != Anchor_Center)
+	{
+		rect->lo.x = (Int)((Real)rect->lo.x * scale.x) + offset.x;
+		rect->hi.x = (Int)((Real)rect->hi.x * scale.x) + offset.x;
+		rect->lo.y = (Int)((Real)rect->lo.y * scale.y) + offset.y;
+		rect->hi.y = (Int)((Real)rect->hi.y * scale.y) + offset.y;
+		return Side_Center;
+	}
+
+	const Real xScale = (Real)TheDisplay->getWidth() / (Real)creationResX;
+	const Real yScale = (Real)TheDisplay->getHeight() / (Real)creationResY;
 	const Bool spansWidth = rect->lo.x <= SpanTolerance && rect->hi.x >= creationResX - 1 - SpanTolerance;
 	const Bool spansHeight = rect->lo.y <= SpanTolerance && rect->hi.y >= creationResY - 1 - SpanTolerance;
 
-	if (anchor == Anchor_Center && spansWidth)
+	// Pick the side: follow the parent, so a panel and its buttons move together, unless the parent
+	// stretches. Then a window in the left half of the layout goes with the left edge, one in the
+	// right half with the right edge, and one across the middle stays in the middle.
+	Side side = parentSide;
+	if (spansWidth)
 	{
-		// Backgrounds and full width bars reach the screen edges, like they did before.
-		const Real xScale = (Real)TheDisplay->getWidth() / (Real)creationResX;
+		side = Side_Stretch;
+	}
+	else if (side == Side_Auto || side == Side_Stretch)
+	{
+		const Int middle = creationResX / 2;
+		if (rect->hi.x <= middle)
+			side = Side_Left;
+		else if (rect->lo.x >= middle)
+			side = Side_Right;
+		else
+			side = Side_Center;
+	}
+
+	const Real layoutWidth = (Real)creationResX * scale.x;
+	Int sideOffset;
+	switch (side)
+	{
+	case Side_Left: sideOffset = 0; break;
+	case Side_Right: sideOffset = REAL_TO_INT_FLOOR((Real)TheDisplay->getWidth() - layoutWidth); break;
+	default: sideOffset = offset.x; break;
+	}
+
+	if (side == Side_Stretch)
+	{
 		rect->lo.x = (Int)((Real)rect->lo.x * xScale);
 		rect->hi.x = (Int)((Real)rect->hi.x * xScale);
 	}
 	else
 	{
-		rect->lo.x = (Int)((Real)rect->lo.x * scale.x) + offset.x;
-		rect->hi.x = (Int)((Real)rect->hi.x * scale.x) + offset.x;
+		rect->lo.x = (Int)((Real)rect->lo.x * scale.x) + sideOffset;
+		rect->hi.x = (Int)((Real)rect->hi.x * scale.x) + sideOffset;
 	}
 
-	if (anchor == Anchor_Center && spansHeight)
+	if (spansHeight)
 	{
-		const Real yScale = (Real)TheDisplay->getHeight() / (Real)creationResY;
 		rect->lo.y = (Int)((Real)rect->lo.y * yScale);
 		rect->hi.y = (Int)((Real)rect->hi.y * yScale);
 	}
@@ -232,13 +268,14 @@ void transformRect(Anchor anchor, Int creationResX, Int creationResY, IRegion2D 
 		rect->lo.y = (Int)((Real)rect->lo.y * scale.y) + offset.y;
 		rect->hi.y = (Int)((Real)rect->hi.y * scale.y) + offset.y;
 	}
+	return side;
 }
 
 Coord2D getMenuScale()
 {
 	Coord2D scale;
 	ICoord2D offset;
-	getTransform(isCenteredMenusEnabled() ? Anchor_Center : Anchor_None,
+	getTransform(isMenuShapeKept() ? Anchor_Center : Anchor_None,
 		DEFAULT_DISPLAY_WIDTH, DEFAULT_DISPLAY_HEIGHT, &scale, &offset);
 	return scale;
 }

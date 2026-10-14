@@ -526,6 +526,9 @@ static Bool parseTooltip( const char *token, WinInstanceData *instData,
 // The anchor of the layout that winCreateFromScript is loading right now.
 static hud::Anchor s_layoutAnchor = hud::Anchor_None;
 
+// The side each window of the layout being loaded took, by its depth in the window stack.
+static hud::Side s_sideByDepth[ WIN_STACK_DEPTH ];
+
 // Sets s_layoutAnchor for the layout being loaded, and puts the previous one back when done.
 class ScopedLayoutAnchor
 {
@@ -580,7 +583,10 @@ static Bool parseScreenRect( const char *token, char *buffer,
 	// resolution divided by the creation resolution
 	//
 	// TheSuperHackers @feature HUD and menu layouts scale uniformly and are anchored instead, see HudLayout.h
-	hud::transformRect( s_layoutAnchor, createRes.x, createRes.y, &screenRegion );
+	// Each window remembers its side at its depth in the window stack, for its children to follow.
+	const Int depth = (Int)(stackPtr - windowStack);
+	const hud::Side parentSide = (parent && depth > 0) ? s_sideByDepth[ depth - 1 ] : hud::Side_Auto;
+	s_sideByDepth[ depth ] = hud::transformRect( s_layoutAnchor, createRes.x, createRes.y, &screenRegion, parentSide );
 
 	//
 	// given the screen region upper left compute the upper left that we

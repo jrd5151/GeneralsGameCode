@@ -22,9 +22,10 @@
 // axis, so on 16:9 and ultrawide screens everything is pulled wide. With the centered layouts,
 // layouts are scaled by the same factor on both axes, so they fill the screen height like they do
 // at 4:3. The HUD is anchored to the bottom center (or the top right for the general's power
-// shortcuts) and can be made smaller with the HUD size option. Menus are centered, and their
-// windows that cover the whole width or height of the layout, like backgrounds, still stretch to
-// the screen edges.
+// shortcuts) and can be made smaller with the HUD size option. Menus spread to the screen shape:
+// each part keeps its shape and stays with the left edge, the middle or the right edge, so the
+// shell map shows between them. Windows that cover the whole width or height of the layout, like
+// backgrounds, still stretch to the screen edges.
 
 #pragma once
 
@@ -38,7 +39,7 @@ enum Anchor
 	Anchor_None, ///< Stretch to the display, as in the original game
 	Anchor_BottomCenter, ///< Control bar and the popups that belong to it
 	Anchor_TopRight, ///< General's power shortcut bar
-	Anchor_Center, ///< Menus and dialogs
+	Anchor_Center, ///< Menus and dialogs, spread over the screen width
 
 	Anchor_Count
 };
@@ -55,9 +56,9 @@ enum
 /// stretched art for wide screens.
 Bool isCenteredHudEnabled();
 
-/// Whether the menus are centered. CenteredMenus = no in Options.ini turns it off, and it is off
-/// with a 'Control Bar Pro' addon too.
-Bool isCenteredMenusEnabled();
+/// Whether the menus keep their shape. KeepMenuShape = no in Options.ini turns it off, and it is
+/// off with a 'Control Bar Pro' addon too.
+Bool isMenuShapeKept();
 
 /// The HUD size option in percent of the full height fit, from HudSizePercentMin to 100.
 Int getHudSizePercent();
@@ -76,9 +77,22 @@ Anchor getLayoutAnchor(const char *layoutFilename);
 /// A point p in the layout ends up at p * scale + offset on screen.
 Bool getTransform(Anchor anchor, Int creationResX, Int creationResY, Coord2D *scale, ICoord2D *offset);
 
+/// How a menu window sits across the screen width.
+enum Side
+{
+	Side_Auto, ///< No parent to follow: pick by which half of the layout the window is in
+	Side_Left,
+	Side_Center,
+	Side_Right,
+	Side_Stretch, ///< Spans the whole layout width, so it stretches to the screen edges
+};
+
 /// Moves a window rectangle from layout to screen coordinates. Unlike getTransform, menu windows
-/// that span the whole layout width or height stretch to the screen edges on that axis.
-void transformRect(Anchor anchor, Int creationResX, Int creationResY, IRegion2D *rect);
+/// spread over the screen width: they keep their shape and stay with the left edge, the middle or
+/// the right edge, the same as their parent window. Windows that span the whole layout width or
+/// height stretch to the screen edges on that axis. Returns the side the window took, for its
+/// children to follow.
+Side transformRect(Anchor anchor, Int creationResX, Int creationResY, IRegion2D *rect, Side parentSide);
 
 /// The scale from 800x600 that menu art drawn in code should use, so it matches the windows.
 Coord2D getMenuScale();

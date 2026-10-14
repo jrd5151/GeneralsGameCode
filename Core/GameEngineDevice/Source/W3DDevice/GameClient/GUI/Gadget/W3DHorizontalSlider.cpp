@@ -151,7 +151,7 @@ void W3DGadgetHorizontalSliderImageDraw( GameWindow *window,
 
 	SliderData *s = (SliderData *)window->winGetUserData();
 
-	// TheSuperHackers @feature Match the slider's own scale when menus are centered.
+	// TheSuperHackers @feature Match the slider's own scale when menus keep their shape.
 	Real xMulti = hud::getMenuScale().x;
 
 	// figure out how many boxes we draw for this slider
@@ -231,7 +231,7 @@ void W3DGadgetHorizontalSliderImageDrawB( GameWindow *window,
 
 	SliderData *s = (SliderData *)window->winGetUserData();
 
-	// TheSuperHackers @feature Match the slider's own scale when menus are centered.
+	// TheSuperHackers @feature Match the slider's own scale when menus keep their shape.
 	Real xMulti = hud::getMenuScale().x;
 	Real yMulti = hud::getMenuScale().y;
 	// get image offset

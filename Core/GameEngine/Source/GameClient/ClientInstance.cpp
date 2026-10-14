@@ -24,6 +24,7 @@ namespace rts
 {
 HANDLE ClientInstance::s_mutexHandle = nullptr;
 UnsignedInt ClientInstance::s_instanceIndex = 0;
+Bool ClientInstance::s_restartOnExit = false;
 
 #if defined(RTS_MULTI_INSTANCE)
 Bool ClientInstance::s_isMultiInstance = true;
@@ -128,6 +129,25 @@ UnsignedInt ClientInstance::getInstanceId()
 const char* ClientInstance::getFirstInstanceName()
 {
 	return GENERALS_GUID;
+}
+
+void ClientInstance::deinitialize()
+{
+	if (s_mutexHandle != nullptr)
+	{
+		CloseHandle(s_mutexHandle);
+		s_mutexHandle = nullptr;
+	}
+}
+
+void ClientInstance::setRestartOnExit(bool v)
+{
+	s_restartOnExit = v;
+}
+
+bool ClientInstance::isRestartOnExit()
+{
+	return s_restartOnExit;
 }
 
 } // namespace rts

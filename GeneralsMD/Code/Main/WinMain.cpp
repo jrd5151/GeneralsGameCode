@@ -769,6 +769,45 @@ static Bool initializeAppWindows( HINSTANCE hInstance, Int nCmdShow, Bool runWin
 }
 
 // Necessary to allow memory managers and such to have useful critical sections
+//-------------------------------------------------------------------------------------------------
+/** TheSuperHackers @feature Starts the game again with the same arguments, for example after another mod
+	* was picked in the mod menu. A -mod argument is left out, so the mod saved in Options.ini is loaded. */
+//-------------------------------------------------------------------------------------------------
+static void relaunchGame()
+{
+	char exePath[_MAX_PATH];
+	if (GetModuleFileName(nullptr, exePath, ARRAY_SIZE(exePath)) == 0)
+		return;
+
+	char commandLine[4096];
+	snprintf(commandLine, ARRAY_SIZE(commandLine), "\"%s\"", exePath);
+
+	for (Int i = 1; i < __argc; ++i)
+	{
+		if (stricmp(__argv[i], "-mod") == 0)
+		{
+			++i; // skip the mod path too
+			continue;
+		}
+
+		strlcat(commandLine, " \"", ARRAY_SIZE(commandLine));
+		strlcat(commandLine, __argv[i], ARRAY_SIZE(commandLine));
+		strlcat(commandLine, "\"", ARRAY_SIZE(commandLine));
+	}
+
+	STARTUPINFO startupInfo;
+	memset(&startupInfo, 0, sizeof(startupInfo));
+	startupInfo.cb = sizeof(startupInfo);
+	PROCESS_INFORMATION processInfo;
+	memset(&processInfo, 0, sizeof(processInfo));
+
+	if (CreateProcess(exePath, commandLine, nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startupInfo, &processInfo))
+	{
+		CloseHandle(processInfo.hThread);
+		CloseHandle(processInfo.hProcess);
+	}
+}
+
 static CriticalSection critSec1, critSec2, critSec3, critSec4;
 
 // UnHandledExceptionFilter ===================================================
@@ -919,6 +958,13 @@ Int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
 		delete TheVersion;
 		TheVersion = nullptr;
+
+		if (rts::ClientInstance::isRestartOnExit())
+		{
+			// Release the instance first, so the new process does not see this one as still running.
+			rts::ClientInstance::deinitialize();
+			relaunchGame();
+		}
 
 	#ifdef MEMORYPOOL_DEBUG
 		TheMemoryPoolFactory->debugMemoryReport(REPORT_POOLINFO | REPORT_POOL_OVERFLOW | REPORT_SIMPLE_LEAKS, 0, 0);

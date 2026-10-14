@@ -905,3 +905,12 @@ Real OptionPreferences::getCameraHeightScale() const
 	Real scale = (Real) atof(it->second.str());
 	return clamp(0.5f, scale, 2.0f);
 }
+
+AsciiString OptionPreferences::getSelectedMod() const
+{
+	OptionPreferences::const_iterator it = find("Mod");
+	if (it == end())
+		return AsciiString::TheEmptyString;
+
+	return it->second;
+}

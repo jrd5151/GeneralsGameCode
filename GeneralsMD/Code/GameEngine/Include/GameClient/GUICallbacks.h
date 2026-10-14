@@ -131,6 +131,12 @@ extern void KeyboardOptionsMenuShutdown( WindowLayout *layout, void *userData );
 extern WindowMsgHandledType KeyboardOptionsMenuSystem( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 );
 extern WindowMsgHandledType KeyboardOptionsMenuInput( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 );
 
+// Mod Menu --------------------------------------------------------------------------------------
+extern void ModMenuInit( WindowLayout *layout, void *userData );
+extern void ModMenuShutdown( WindowLayout *layout, void *userData );
+extern WindowMsgHandledType ModMenuSystem( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 );
+extern WindowMsgHandledType ModMenuInput( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 );
+
 // Lan Lobby Menu ----------------------------------------------------------------------------------
 extern void LanLobbyMenuInit( WindowLayout *layout, void *userData );
 extern void LanLobbyMenuUpdate( WindowLayout *layout, void *userData );

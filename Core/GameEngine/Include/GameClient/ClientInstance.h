@@ -47,10 +47,18 @@ public:
 	// Returns the instance name of the first game client.
 	static const char* getFirstInstanceName();
 
+	// TheSuperHackers @feature Releases the instance, so a new game process can start before this one ends.
+	static void deinitialize();
+
+	// TheSuperHackers @feature Asks the game to start itself again after it quits, for example to load another mod.
+	static void setRestartOnExit(bool v);
+	static bool isRestartOnExit();
+
 private:
 	static HANDLE s_mutexHandle;
 	static UnsignedInt s_instanceIndex;
 	static Bool s_isMultiInstance;
+	static Bool s_restartOnExit;
 };
 
 } // namespace rts

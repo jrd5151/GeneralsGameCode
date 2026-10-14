@@ -30,6 +30,7 @@
 // and a volume from the listener position, nothing more.
 
 #include "MilesLoader.h"
+#include "MilesVideoAudio.h"
 #include "mss/mss.h"
 
 #include <miniaudio.h>
@@ -136,6 +137,8 @@ HMODULE DirectSoundModule = nullptr;
 void *DirectSound = nullptr;
 
 char LastError[64] = "";
+
+void releaseVideoSounds();
 
 //-------------------------------------------------------------------------------------------------
 class ScopedLock
@@ -854,6 +857,7 @@ void __stdcall AIL_shutdown(void)
 	ScopedLock lock;
 	while (Voices != nullptr)
 		destroyVoice(Voices);
+	releaseVideoSounds();
 
 	if (EngineReady)
 	{
@@ -1565,4 +1569,220 @@ void __stdcall AIL_quick_set_volume(HAUDIO audio, F32 volume, F32 extravol)
 void __stdcall AIL_quick_unload(HAUDIO audio)
 {
 	AIL_close_stream((HSTREAM)audio);
+}
+
+//-------------------------------------------------------------------------------------------------
+// Video sound tracks, see MilesVideoAudio.h. Each one is a sound reading from a queue of samples.
+
+class MilesVideoAudio
+{
+public:
+	ma_data_source_base base; // Must be first, the sound reads the stream as its data source
+	ma_pcm_rb queue;
+	ma_sound sound;
+	bool soundReady;
+	ma_uint32 channels;
+	ma_uint32 sampleRate;
+	MilesVideoAudio *prev;
+	MilesVideoAudio *next;
+};
+
+namespace
+{
+
+const ma_uint32 VideoQueueSeconds = 4;
+const int MaxVideoChannels = 8;
+
+MilesVideoAudio *VideoSounds = nullptr;
+
+ma_result videoRead(ma_data_source *dataSource, void *framesOut, ma_uint64 frameCount, ma_uint64 *framesRead)
+{
+	MilesVideoAudio *stream = (MilesVideoAudio *)dataSource;
+	const ma_uint32 frameSize = ma_get_bytes_per_frame(ma_format_f32, stream->channels);
+
+	ma_uint64 total = 0;
+	while (total < frameCount)
+	{
+		ma_uint64 remaining = frameCount - total;
+		ma_uint32 count = remaining > 0xFFFFFFFF ? 0xFFFFFFFF : (ma_uint32)remaining;
+		void *queued = nullptr;
+		if (ma_pcm_rb_acquire_read(&stream->queue, &count, &queued) != MA_SUCCESS || count == 0)
+			break;
+
+		if (framesOut != nullptr)
+			memcpy(ma_offset_pcm_frames_ptr(framesOut, total, ma_format_f32, stream->channels), queued, (size_t)count * frameSize);
+		ma_pcm_rb_commit_read(&stream->queue, count);
+		total += count;
+	}
+
+	// Never end: play silence until the video writes more.
+	if (framesOut != nullptr && total < frameCount)
+		memset(ma_offset_pcm_frames_ptr(framesOut, total, ma_format_f32, stream->channels), 0, (size_t)(frameCount - total) * frameSize);
+
+	*framesRead = frameCount;
+	return MA_SUCCESS;
+}
+
+ma_result videoSeek(ma_data_source *, ma_uint64)
+{
+	return MA_SUCCESS;
+}
+
+ma_result videoGetDataFormat(ma_data_source *dataSource, ma_format *format, ma_uint32 *channels, ma_uint32 *sampleRate, ma_channel *channelMap, size_t channelMapCap)
+{
+	MilesVideoAudio *stream = (MilesVideoAudio *)dataSource;
+	if (format != nullptr)
+		*format = ma_format_f32;
+	if (channels != nullptr)
+		*channels = stream->channels;
+	if (sampleRate != nullptr)
+		*sampleRate = stream->sampleRate;
+	if (channelMap != nullptr)
+		ma_channel_map_init_standard(ma_standard_channel_map_default, channelMap, channelMapCap, stream->channels);
+	return MA_SUCCESS;
+}
+
+ma_result videoGetCursor(ma_data_source *, ma_uint64 *cursor)
+{
+	*cursor = 0;
+	return MA_NOT_IMPLEMENTED;
+}
+
+ma_result videoGetLength(ma_data_source *, ma_uint64 *length)
+{
+	*length = 0;
+	return MA_NOT_IMPLEMENTED;
+}
+
+ma_data_source_vtable VideoSourceVtable =
+{
+	videoRead,
+	videoSeek,
+	videoGetDataFormat,
+	videoGetCursor,
+	videoGetLength,
+	nullptr,
+	0
+};
+
+void releaseVideoSound(MilesVideoAudio *stream)
+{
+	if (stream->soundReady)
+	{
+		ma_sound_uninit(&stream->sound);
+		stream->soundReady = false;
+	}
+}
+
+// Called with the lock held before the engine goes away. Streams still open stay valid but silent.
+void releaseVideoSounds()
+{
+	for (MilesVideoAudio *stream = VideoSounds; stream != nullptr; stream = stream->next)
+		releaseVideoSound(stream);
+}
+
+} // namespace
+
+MilesVideoAudio *MilesVideoAudio_open(int channels, int sampleRate)
+{
+	ScopedLock lock;
+	if (!EngineReady || channels < 1 || channels > MaxVideoChannels || sampleRate < 1000 || sampleRate > 384000)
+		return nullptr;
+
+	MilesVideoAudio *stream = (MilesVideoAudio *)calloc(1, sizeof(MilesVideoAudio));
+	if (stream == nullptr)
+		return nullptr;
+
+	stream->channels = (ma_uint32)channels;
+	stream->sampleRate = (ma_uint32)sampleRate;
+
+	ma_data_source_config config = ma_data_source_config_init();
+	config.vtable = &VideoSourceVtable;
+	if (ma_data_source_init(&config, &stream->base) != MA_SUCCESS)
+	{
+		free(stream);
+		return nullptr;
+	}
+
+	if (ma_pcm_rb_init(ma_format_f32, stream->channels, stream->sampleRate * VideoQueueSeconds, nullptr, nullptr, &stream->queue) != MA_SUCCESS)
+	{
+		ma_data_source_uninit(&stream->base);
+		free(stream);
+		return nullptr;
+	}
+
+	if (ma_sound_init_from_data_source(&Engine, stream, MA_SOUND_FLAG_NO_SPATIALIZATION, nullptr, &stream->sound) != MA_SUCCESS)
+	{
+		ma_pcm_rb_uninit(&stream->queue);
+		ma_data_source_uninit(&stream->base);
+		free(stream);
+		return nullptr;
+	}
+	stream->soundReady = true;
+	ma_sound_start(&stream->sound);
+
+	stream->next = VideoSounds;
+	if (VideoSounds != nullptr)
+		VideoSounds->prev = stream;
+	VideoSounds = stream;
+	return stream;
+}
+
+void MilesVideoAudio_write(MilesVideoAudio *stream, const float *frames, unsigned int frameCount)
+{
+	if (stream == nullptr || frames == nullptr)
+		return;
+
+	const ma_uint32 frameSize = ma_get_bytes_per_frame(ma_format_f32, stream->channels);
+	while (frameCount > 0)
+	{
+		ma_uint32 count = frameCount;
+		void *space = nullptr;
+		if (ma_pcm_rb_acquire_write(&stream->queue, &count, &space) != MA_SUCCESS || count == 0)
+			return; // Queue full, drop the rest
+
+		memcpy(space, frames, (size_t)count * frameSize);
+		ma_pcm_rb_commit_write(&stream->queue, count);
+		frames += (size_t)count * stream->channels;
+		frameCount -= count;
+	}
+}
+
+void MilesVideoAudio_setVolume(MilesVideoAudio *stream, float volume)
+{
+	ScopedLock lock;
+	if (stream != nullptr && stream->soundReady)
+		ma_sound_set_volume(&stream->sound, volume < 0.0f ? 0.0f : volume);
+}
+
+void MilesVideoAudio_pause(MilesVideoAudio *stream, bool paused)
+{
+	ScopedLock lock;
+	if (stream == nullptr || !stream->soundReady)
+		return;
+
+	if (paused)
+		ma_sound_stop(&stream->sound);
+	else
+		ma_sound_start(&stream->sound);
+}
+
+void MilesVideoAudio_close(MilesVideoAudio *stream)
+{
+	if (stream == nullptr)
+		return;
+
+	ScopedLock lock;
+	releaseVideoSound(stream);
+
+	if (stream->prev != nullptr)
+		stream->prev->next = stream->next;
+	else
+		VideoSounds = stream->next;
+	if (stream->next != nullptr)
+		stream->next->prev = stream->prev;
+
+	ma_pcm_rb_uninit(&stream->queue);
+	ma_data_source_uninit(&stream->base);
+	free(stream);
 }

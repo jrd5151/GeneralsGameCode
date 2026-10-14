@@ -49,9 +49,15 @@
 // USER INCLUDES //////////////////////////////////////////////////////////////
 #include "GameClient/Gadget.h"
 #include "GameClient/GameWindowGlobal.h"
+#include "GameClient/HudLayout.h"
+#include "GameClient/VideoPlayer.h"
 #include "W3DDevice/GameClient/W3DGameWindow.h"
 #include "W3DDevice/GameClient/W3DGameWindowManager.h"
 #include "W3DDevice/GameClient/W3DDisplay.h"
+
+// How much wider than a video its window must be before the video stops stretching to fill it.
+// Leaves windows authored at about the video's shape as they were.
+static const Real WidenedVideoTolerance = 1.05f;
 
 // DEFINES ////////////////////////////////////////////////////////////////////
 enum
@@ -385,7 +391,22 @@ void W3DGameWinDefaultDraw( GameWindow *window, WinInstanceData *instData )
 		window->winGetScreenPosition( &pos.x, &pos.y );
 		window->winGetSize( &size.x, &size.y );
 
-		TheDisplay->drawVideoBuffer( instData->m_videoBuffer, pos.x, pos.y, pos.x + size.x, pos.y + size.y );
+		// When the menus keep their shape, a video in a window that the screen made wider, such as a
+		// load screen, keeps its own shape, centered. The window's image, drawn above, fills the sides.
+		VideoBuffer *video = instData->m_videoBuffer;
+		if ( hud::isMenuShapeKept() && video->height() > 0 && size.y > 0 )
+		{
+			const Real videoAspect = (Real)video->width() / (Real)video->height();
+			const Real windowAspect = (Real)size.x / (Real)size.y;
+			if ( windowAspect > videoAspect * WidenedVideoTolerance )
+			{
+				const Int width = REAL_TO_INT_FLOOR( size.y * videoAspect + 0.5f );
+				pos.x += ( size.x - width ) / 2;
+				size.x = width;
+			}
+		}
+
+		TheDisplay->drawVideoBuffer( video, pos.x, pos.y, pos.x + size.x, pos.y + size.y );
 	}
 
 }

@@ -1,8 +1,13 @@
 set(MILES_SRC
     mss/mss.h
-    MilesLoader.cpp
     MilesLoader.h
 )
+
+if(RTS_BUILD_OPTION_MINIAUDIO)
+    list(APPEND MILES_SRC MilesMiniaudio.cpp)
+else()
+    list(APPEND MILES_SRC MilesLoader.cpp)
+endif()
 
 add_library(deps_miles STATIC)
 
@@ -17,3 +22,7 @@ target_link_libraries(deps_miles PRIVATE
     depsi_always # Gives force included headers. Link early.
     deps_utility
 )
+
+if(RTS_BUILD_OPTION_MINIAUDIO)
+    target_link_libraries(deps_miles PRIVATE deps_miniaudio)
+endif()

@@ -161,6 +161,9 @@ public:
 	virtual void drawScaledVideoBuffer( VideoBuffer *buffer, VideoStreamInterface *stream ) = 0;
 	virtual void drawVideoBuffer( VideoBuffer *buffer, Int startX, Int startY,
 													Int endX, Int endY ) = 0;
+	/// draw part of a video buffer, given in video pixels, fit within the screen coordinates
+	virtual void drawVideoBufferPart( VideoBuffer *buffer, Int startX, Int startY, Int endX, Int endY,
+													Real sourceX1, Real sourceY1, Real sourceX2, Real sourceY2 ) = 0;
 
 	/// FullScreen video playback
 	virtual void playMovie( AsciiString movieName );

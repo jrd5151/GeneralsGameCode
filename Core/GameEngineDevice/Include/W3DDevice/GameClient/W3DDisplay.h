@@ -120,6 +120,8 @@ public:
 	virtual void drawScaledVideoBuffer( VideoBuffer *buffer, VideoStreamInterface *stream ) override;
 	virtual void drawVideoBuffer( VideoBuffer *buffer, Int startX, Int startY,
 													Int endX, Int endY ) override;
+	virtual void drawVideoBufferPart( VideoBuffer *buffer, Int startX, Int startY, Int endX, Int endY,
+													Real sourceX1, Real sourceY1, Real sourceX2, Real sourceY2 ) override;
 
 	virtual VideoBuffer*	createVideoBuffer() override;							///< Create a video buffer that can be used for this display
 

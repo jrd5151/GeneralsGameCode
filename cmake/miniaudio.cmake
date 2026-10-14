@@ -18,3 +18,8 @@ target_compile_definitions(deps_miniaudio PUBLIC
     MA_NO_ENCODING
     MA_NO_FLAC
 )
+
+if(IS_VS6_BUILD)
+    # VC6 rejects __restrict with "C1600: unsupported data type".
+    target_compile_definitions(deps_miniaudio PUBLIC MA_RESTRICT=)
+endif()

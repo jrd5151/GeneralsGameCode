@@ -188,7 +188,7 @@ ma_result loopRead(ma_data_source *dataSource, void *framesOut, ma_uint64 frameC
 		if (loops == 1)
 			break;
 		if (loops > 1)
-			InterlockedDecrement(&source->loopsRemaining);
+			InterlockedDecrement(const_cast<LONG*>(&source->loopsRemaining));
 
 		ma_data_source_seek_to_pcm_frame(source->inner, 0);
 		readNothingSinceLoop = true;
@@ -845,7 +845,7 @@ void __stdcall AIL_shutdown(void)
 {
 	if (ServiceThread != nullptr)
 	{
-		InterlockedExchange(&ServiceQuit, 1);
+		InterlockedExchange(const_cast<LONG*>(&ServiceQuit), 1);
 		WaitForSingleObject(ServiceThread, INFINITE);
 		CloseHandle(ServiceThread);
 		ServiceThread = nullptr;

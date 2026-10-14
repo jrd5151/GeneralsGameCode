@@ -39,6 +39,7 @@
 //----------------------------------------------------------------------------
 
 class FFmpegFile;
+class MilesVideoAudio;
 struct AVFrame;
 struct SwsContext;
 
@@ -63,11 +64,13 @@ class FFmpegVideoStream : public VideoStream
 		Char			*m_memFile;				///< Pointer to memory resident file
 		UnsignedInt64	m_startTime = 0;		///< Time the stream started
 		UnsignedByte *	m_audioBuffer = nullptr;///< Audio buffer for the stream
+		MilesVideoAudio	*m_audio = nullptr;		///< Plays the sound track, when built with miniaudio
 
 		FFmpegVideoStream(FFmpegFile* file);																///< only BinkVideoPlayer can create these
 		virtual ~FFmpegVideoStream();
 
 		static void onFrame(AVFrame *frame, int stream_idx, int stream_type, void *user_data);
+		void writeAudio(AVFrame *frame);					///< Queue a decoded audio frame on m_audio
 	public:
 
 		virtual void update();											///< Update bink stream
@@ -121,7 +124,8 @@ class FFmpegVideoPlayer : public VideoPlayer
 		virtual VideoStreamInterface*	load( AsciiString movieTitle );	///< Load video file in to memory for playback
 
 		virtual void notifyVideoPlayerOfNewProvider( Bool nowHasValid );
-		virtual void setVolume( Real ) override { }
+		virtual void setVolume( Real volume ) override;
+		static Real calculateMovieAudioVolume( Real volume );
 		virtual void initializeBinkWithMiles();
 };
 

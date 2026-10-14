@@ -4,7 +4,7 @@ set(MILES_SRC
 )
 
 if(RTS_BUILD_OPTION_MINIAUDIO)
-    list(APPEND MILES_SRC MilesMiniaudio.cpp)
+    list(APPEND MILES_SRC MilesMiniaudio.cpp MilesVideoAudio.h)
 else()
     list(APPEND MILES_SRC MilesLoader.cpp)
 endif()
@@ -25,4 +25,5 @@ target_link_libraries(deps_miles PRIVATE
 
 if(RTS_BUILD_OPTION_MINIAUDIO)
     target_link_libraries(deps_miles PRIVATE deps_miniaudio)
+    target_compile_definitions(deps_miles PUBLIC RTS_HAS_MINIAUDIO)
 endif()

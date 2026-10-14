@@ -51,6 +51,10 @@ extern "C" {
 #include "OpenALAudioDevice/OpenALAudioStream.h"
 #endif
 
+#ifdef RTS_HAS_MINIAUDIO
+#include "MilesVideoAudio.h"
+#endif
+
 #include <chrono>
 
 //----------------------------------------------------------------------------
@@ -208,16 +212,37 @@ VideoStreamInterface* FFmpegVideoPlayer::createStream( File* file )
 		stream->m_player = this;
 		m_firstStream = stream;
 
-		// never let volume go to 0, as Bink will interpret that as "play at full volume".
-		Int mod = (Int) ((TheAudio->getVolume(AudioAffect_Speech) * 0.8f) * 100) + 1;
-		[[maybe_unused]]  Int volume = (32768 * mod) / 100;
-		DEBUG_LOG(("FFmpegVideoPlayer::createStream() - About to set volume (%g -> %d -> %d",
-			TheAudio->getVolume(AudioAffect_Speech), mod, volume));
-		//BinkSetVolume( stream->m_handle,0, volume);
-		DEBUG_LOG(("FFmpegVideoPlayer::createStream() - set volume"));
+#ifdef RTS_HAS_MINIAUDIO
+		MilesVideoAudio_setVolume(stream->m_audio, calculateMovieAudioVolume(TheAudio->getVolume(AudioAffect_Speech)));
+#endif
 	}
 
 	return stream;
+}
+
+//============================================================================
+// FFmpegVideoPlayer::calculateMovieAudioVolume
+//============================================================================
+
+Real FFmpegVideoPlayer::calculateMovieAudioVolume( Real volume )
+{
+	// Movies play at 80% of the speech volume, as they did with Bink.
+	return volume * 0.8f;
+}
+
+//============================================================================
+// FFmpegVideoPlayer::setVolume
+//============================================================================
+
+void FFmpegVideoPlayer::setVolume( Real volume )
+{
+#ifdef RTS_HAS_MINIAUDIO
+	const Real movieVolume = calculateMovieAudioVolume( volume );
+	for ( VideoStreamInterface* stream = firstStream(); stream != nullptr; stream = stream->next() )
+	{
+		MilesVideoAudio_setVolume( static_cast<FFmpegVideoStream*>( stream )->m_audio, movieVolume );
+	}
+#endif
 }
 
 //============================================================================
@@ -315,6 +340,10 @@ FFmpegVideoStream::FFmpegVideoStream(FFmpegFile* file)
 	// Release the audio handle if it's already in use
 	OpenALAudioStream* audioStream = (OpenALAudioStream*)TheAudio->getHandleForBink();
 	audioStream->reset();
+#elif defined(RTS_HAS_MINIAUDIO)
+	// Open the sound track before decoding, the first packets carry its start
+	if (m_ffmpegFile->hasAudio())
+		m_audio = MilesVideoAudio_open(m_ffmpegFile->getNumChannels(), m_ffmpegFile->getSampleRate());
 #endif
 
 	// Decode until we have our first video frame
@@ -335,6 +364,9 @@ FFmpegVideoStream::FFmpegVideoStream(FFmpegFile* file)
 
 FFmpegVideoStream::~FFmpegVideoStream()
 {
+#ifdef RTS_HAS_MINIAUDIO
+	MilesVideoAudio_close(m_audio);
+#endif
 	av_freep(&m_audioBuffer);
 	av_frame_free(&m_frame);
 	sws_freeContext(m_swsContext);
@@ -384,6 +416,67 @@ void FFmpegVideoStream::onFrame(AVFrame *frame, int stream_idx, int stream_type,
 		ALenum format = OpenALAudioManager::getALFormat(frame->ch_layout.nb_channels, bytesPerSample * 8);
 		audioStream->bufferData(frameData, frameSize, format, frame->sample_rate);
 	}
+#elif defined(RTS_HAS_MINIAUDIO)
+	else if (stream_type == AVMEDIA_TYPE_AUDIO) {
+		videoStream->writeAudio(frame);
+	}
+#endif
+}
+
+//============================================================================
+// FFmpegVideoStream::writeAudio
+//============================================================================
+
+void FFmpegVideoStream::writeAudio(AVFrame *frame)
+{
+#ifdef RTS_HAS_MINIAUDIO
+	if (m_audio == nullptr || frame->nb_samples <= 0)
+		return;
+
+	const int channels = frame->ch_layout.nb_channels;
+	if (channels != m_ffmpegFile->getNumChannels())
+		return;
+
+	const AVSampleFormat sampleFmt = static_cast<AVSampleFormat>(frame->format);
+	const AVSampleFormat packedFmt = av_get_packed_sample_fmt(sampleFmt);
+	const bool planar = av_sample_fmt_is_planar(sampleFmt) != 0;
+	const int bytesPerSample = av_get_bytes_per_sample(sampleFmt);
+	if (bytesPerSample <= 0)
+		return;
+
+	const size_t sampleCount = (size_t)frame->nb_samples * channels;
+	m_audioBuffer = static_cast<UnsignedByte*>(av_realloc(m_audioBuffer, sampleCount * sizeof(float)));
+	if (m_audioBuffer == nullptr)
+	{
+		DEBUG_LOG(("Failed to allocate audio buffer"));
+		return;
+	}
+
+	// The sound track is played as interleaved floats, whatever format the decoder gives
+	float *out = reinterpret_cast<float*>(m_audioBuffer);
+	for (int sample_idx = 0; sample_idx < frame->nb_samples; sample_idx++)
+	{
+		for (int channel_idx = 0; channel_idx < channels; channel_idx++)
+		{
+			const uint8_t *src = planar
+				? frame->extended_data[channel_idx] + (size_t)sample_idx * bytesPerSample
+				: frame->extended_data[0] + ((size_t)sample_idx * channels + channel_idx) * bytesPerSample;
+
+			float value;
+			switch (packedFmt)
+			{
+				case AV_SAMPLE_FMT_U8:  value = ((int)*src - 128) / 128.0f; break;
+				case AV_SAMPLE_FMT_S16: value = *reinterpret_cast<const int16_t*>(src) / 32768.0f; break;
+				case AV_SAMPLE_FMT_S32: value = (float)(*reinterpret_cast<const int32_t*>(src) / 2147483648.0); break;
+				case AV_SAMPLE_FMT_FLT: value = *reinterpret_cast<const float*>(src); break;
+				case AV_SAMPLE_FMT_DBL: value = (float)*reinterpret_cast<const double*>(src); break;
+				default: return;
+			}
+			*out++ = value;
+		}
+	}
+
+	MilesVideoAudio_write(m_audio, reinterpret_cast<const float*>(m_audioBuffer), (unsigned int)frame->nb_samples);
 #endif
 }
 

@@ -80,11 +80,11 @@ static void drawVideoSideFill( VideoBuffer *video, Int windowLeft, Int windowRig
 		return;
 
 	// Left side: copies of the strip from 1 to 1 + strip, moving outwards
-	for ( Int copy = 1; ; ++copy )
+	for ( Int leftCopy = 1; ; ++leftCopy )
 	{
 		const Real sourceStart = 1.0f;
 		const Real sourceEnd = 1.0f + strip;
-		Real x1 = videoLeft + ( sourceStart - copy * strip ) * scale;
+		Real x1 = videoLeft + ( sourceStart - leftCopy * strip ) * scale;
 		const Real x2 = x1 + strip * scale;
 		if ( x2 <= (Real)windowLeft )
 			break;
@@ -100,10 +100,10 @@ static void drawVideoSideFill( VideoBuffer *video, Int windowLeft, Int windowRig
 	}
 
 	// Right side: copies of the last strip of the video, moving outwards
-	for ( Int copy = 1; ; ++copy )
+	for ( Int rightCopy = 1; ; ++rightCopy )
 	{
 		const Real sourceStart = videoWidth - strip;
-		const Real x1 = videoLeft + ( videoWidth + ( copy - 1 ) * strip ) * scale;
+		const Real x1 = videoLeft + ( videoWidth + ( rightCopy - 1 ) * strip ) * scale;
 		Real x2 = x1 + strip * scale;
 		if ( x1 >= (Real)windowRight )
 			break;

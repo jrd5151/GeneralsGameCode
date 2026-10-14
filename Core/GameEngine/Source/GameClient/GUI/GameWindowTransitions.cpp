@@ -381,6 +381,34 @@ void TransitionGroup::addWindow( TransitionWindow *transWin )
 	m_transitionWindowList.push_back(transWin);
 }
 
+void TransitionGroup::copyWindowTransitions( const AsciiString &fromWinName, const AsciiString &toWinName )
+{
+	TransitionWindowList::iterator it;
+	for (it = m_transitionWindowList.begin(); it != m_transitionWindowList.end(); ++it)
+	{
+		if ((*it)->m_winName.compareNoCase(toWinName) == 0)
+			return;
+	}
+
+	TransitionWindowList copies;
+	for (it = m_transitionWindowList.begin(); it != m_transitionWindowList.end(); ++it)
+	{
+		const TransitionWindow *source = *it;
+		if (source->m_winName.compareNoCase(fromWinName) != 0)
+			continue;
+
+		TransitionWindow *copy = NEW TransitionWindow;
+		copy->m_winName = toWinName;
+		copy->m_frameDelay = source->m_frameDelay;
+		copy->m_style = source->m_style;
+		// The group only creates the transitions when it starts, so a running group needs this one now.
+		if (source->m_transition)
+			copy->init();
+		copies.push_back(copy);
+	}
+	m_transitionWindowList.splice(m_transitionWindowList.end(), copies);
+}
+
 //-----------------------------------------------------------------------------
 
 GameWindowTransitionsHandler::GameWindowTransitionsHandler()
@@ -571,6 +599,12 @@ TransitionGroup *GameWindowTransitionsHandler::getNewGroup( AsciiString name )
 	g->setName(name);
 	m_transitionGroupList.push_back(g);
 	return g;
+}
+
+void GameWindowTransitionsHandler::copyWindowTransitions( const AsciiString &fromWinName, const AsciiString &toWinName )
+{
+	for (TransitionGroupList::iterator it = m_transitionGroupList.begin(); it != m_transitionGroupList.end(); ++it)
+		(*it)->copyWindowTransitions(fromWinName, toWinName);
 }
 
 Bool GameWindowTransitionsHandler::isFinished()

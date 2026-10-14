@@ -124,6 +124,9 @@ extern void ChallengeMenuShutdown( WindowLayout *layout, void *userData );
 extern WindowMsgHandledType ChallengeMenuSystem( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 );
 extern WindowMsgHandledType ChallengeMenuInput( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 );
 
+// TheSuperHackers @feature Creates a button the original layout does not have, next to the given button and with its look.
+extern GameWindow *CreateLookAlikeButton( GameWindow *lookAlike, const char *windowName, const UnicodeString &text, Int x, Int y, Int width, Int height );
+
 // Keyboard Options Menu ---------------------------------------------------------------------------
 extern void KeyboardOptionsMenuInit( WindowLayout *layout, void *userData );
 extern void KeyboardOptionsMenuUpdate( WindowLayout *layout, void *userData );
@@ -136,6 +139,7 @@ extern void ModMenuInit( WindowLayout *layout, void *userData );
 extern void ModMenuShutdown( WindowLayout *layout, void *userData );
 extern WindowMsgHandledType ModMenuSystem( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 );
 extern WindowMsgHandledType ModMenuInput( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 );
+extern void ModMenuOpen();
 
 // Lan Lobby Menu ----------------------------------------------------------------------------------
 extern void LanLobbyMenuInit( WindowLayout *layout, void *userData );

@@ -918,10 +918,10 @@ static void saveOptions()
 }
 
 //-------------------------------------------------------------------------------------------------
-/** TheSuperHackers @feature Creates a button the original layout does not have, such as the Mods
-	* button. It takes the look of the given button. */
+/** TheSuperHackers @feature Creates a button the original layout does not have, such as the HUD
+	* size button. It takes the look of the given button. */
 //-------------------------------------------------------------------------------------------------
-static GameWindow *createLookAlikeButton( GameWindow *lookAlike, const char *windowName, const UnicodeString &text,
+GameWindow *CreateLookAlikeButton( GameWindow *lookAlike, const char *windowName, const UnicodeString &text,
 	Int x, Int y, Int width, Int height )
 {
 	const NameKeyType buttonID = TheNameKeyGenerator->nameToKey( windowName );
@@ -1459,11 +1459,13 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 			if (buttonKeyboard->winGetParent())
 				buttonKeyboard->winGetParent()->winGetScreenPosition( &parentX, &parentY );
 
-			// TheSuperHackers @feature The mods button shares the row in the menus. Changing the mod restarts the game,
-			// so it is not offered during a match.
-			const Bool showModButton = !TheGameLogic->isInGame() || TheGameLogic->isInShellGame();
+			// TheSuperHackers @feature The HUD size button shares the row in the menus. The control bar is rebuilt
+			// for a new size, so it is not offered during a match.
+			s_hudSizePercent = hud::getHudSizePercent();
+			s_hudSizeChanged = FALSE;
+			const Bool showHudSizeButton = (!TheGameLogic->isInGame() || TheGameLogic->isInShellGame()) && hud::isCenteredHudEnabled();
 			const Int buttonGap = 6;
-			const Int keyboardWidth = showModButton ? (columnWidth - buttonGap) / 2 : columnWidth;
+			const Int keyboardWidth = showHudSizeButton ? (columnWidth - buttonGap) / 2 : columnWidth;
 
 			buttonKeyboard->winSetPosition( columnX - parentX, rowY - parentY + 1 );
 			buttonKeyboard->winSetSize( keyboardWidth, rowHeight - 2 );
@@ -1471,24 +1473,11 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 			GadgetButtonSetText( buttonKeyboard, TheGameText->FETCH_OR_SUBSTITUTE( "GUI:KeyboardOptions", L"Keyboard Hotkeys" ) );
 			buttonKeyboard->winHide( FALSE );
 
-			if (showModButton)
-				createLookAlikeButton( buttonKeyboard, "OptionsMenu.wnd:ButtonModMenu", TheGameText->FETCH_OR_SUBSTITUTE( "GUI:ModMenu", L"Mods" ),
+			if (showHudSizeButton)
+			{
+				GameWindow *buttonHudSize = CreateLookAlikeButton( buttonKeyboard, "OptionsMenu.wnd:ButtonHudSize", UnicodeString::TheEmptyString,
 					columnX - parentX + keyboardWidth + buttonGap, rowY - parentY + 1,
 					columnWidth - keyboardWidth - buttonGap, rowHeight - 2 );
-
-			// TheSuperHackers @feature The HUD size button sits under the Mods button, at the right end of the
-			// scroll speed label. The control bar is rebuilt for a new size, so it is not offered during a match.
-			s_hudSizePercent = hud::getHudSizePercent();
-			s_hudSizeChanged = FALSE;
-			GameWindow *scrollSpeedLabel = TheWindowManager->winGetWindowFromId( nullptr, TheNameKeyGenerator->nameToKey( "OptionsMenu.wnd:ScrollSpeedLabel" ) );
-			if (showModButton && hud::isCenteredHudEnabled() && scrollSpeedLabel)
-			{
-				Int labelX, labelY, labelWidth, labelHeight;
-				scrollSpeedLabel->winGetScreenPosition( &labelX, &labelY );
-				scrollSpeedLabel->winGetSize( &labelWidth, &labelHeight );
-				GameWindow *buttonHudSize = createLookAlikeButton( buttonKeyboard, "OptionsMenu.wnd:ButtonHudSize", UnicodeString::TheEmptyString,
-					columnX - parentX + keyboardWidth + buttonGap, labelY - parentY + 1,
-					columnWidth - keyboardWidth - buttonGap, labelHeight - 2 );
 				setHudSizeButtonText( buttonHudSize );
 			}
 		}
@@ -1800,16 +1789,6 @@ WindowMsgHandledType OptionsMenuSystem( GameWindow *window, UnsignedInt msg,
 					s_hudSizePercent = hud::HudSizePercentMax;
 				s_hudSizeChanged = (s_hudSizePercent != hud::getHudSizePercent());
 				setHudSizeButtonText( control );
-			}
-			else if ( controlID == (Int)TheNameKeyGenerator->nameToKey( "OptionsMenu.wnd:ButtonModMenu" ) )
-			{
-				// TheSuperHackers @feature The mod menu opens on top of the options menu, like the hotkey menu.
-				WindowLayout *modLayout = TheWindowManager->winCreateLayout( "Menus/ModMenu.wnd" );
-				if (modLayout)
-				{
-					modLayout->runInit();
-					modLayout->bringForward();
-				}
 			}
 			else if ( controlID == buttonKeyboardOptionsMenu )
 			{

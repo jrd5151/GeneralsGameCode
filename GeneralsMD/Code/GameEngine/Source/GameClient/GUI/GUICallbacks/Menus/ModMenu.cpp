@@ -186,9 +186,9 @@ static void closeModMenu()
 	staticTextStatus = nullptr;
 	modPaths.clear();
 
-	GameWindow *optionsParent = TheWindowManager->winGetWindowFromId( nullptr, TheNameKeyGenerator->nameToKey( "OptionsMenu.wnd:OptionsMenuParent" ) );
-	if (optionsParent)
-		TheWindowManager->winSetFocus( optionsParent );
+	GameWindow *mainMenuParent = TheWindowManager->winGetWindowFromId( nullptr, TheNameKeyGenerator->nameToKey( "MainMenu.wnd:MainMenuParent" ) );
+	if (mainMenuParent)
+		TheWindowManager->winSetFocus( mainMenuParent );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -231,6 +231,22 @@ static void setButtonText(const char *name, const UnicodeString &text)
 }
 
 // PUBLIC FUNCTIONS ///////////////////////////////////////////////////////////////////////////////
+
+//-------------------------------------------------------------------------------------------------
+/** Open the mod menu on top of the main menu. It is not part of the shell stack, see closeModMenu */
+//-------------------------------------------------------------------------------------------------
+void ModMenuOpen()
+{
+	if (modMenuLayout)
+		return;
+
+	WindowLayout *layout = TheWindowManager->winCreateLayout( "Menus/ModMenu.wnd" );
+	if (layout)
+	{
+		layout->runInit();
+		layout->bringForward();
+	}
+}
 
 //-------------------------------------------------------------------------------------------------
 /** Initialize the mod menu */
@@ -276,7 +292,7 @@ void ModMenuInit( WindowLayout *layout, void *userData )
 //-------------------------------------------------------------------------------------------------
 void ModMenuShutdown( WindowLayout *layout, void *userData )
 {
-	// The menu opens on top of the options menu and is not part of the shell stack, see closeModMenu
+	// The menu opens on top of the main menu and is not part of the shell stack, see closeModMenu
 	layout->hide( TRUE );
 }
 

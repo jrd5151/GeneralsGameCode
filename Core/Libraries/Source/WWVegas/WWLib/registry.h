@@ -107,7 +107,7 @@ private:
 	static void Save_Registry_Values(HKEY key, char *path, INIClass *ini);
 
 
-	int	Key;
+	uintptr_t	Key; // TheSuperHackers @build Holds an HKEY, so it is pointer-sized.
 	bool	IsValid;
 
 	//

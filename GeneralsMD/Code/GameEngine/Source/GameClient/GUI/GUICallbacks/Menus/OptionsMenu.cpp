@@ -491,7 +491,7 @@ static void saveOptions()
 		GadgetComboBoxGetSelectedPos(comboBoxLANIP, &index);
 		if (index>=0 && TheGlobalData)
 		{
-			ip = (UnsignedInt)GadgetComboBoxGetItemData(comboBoxLANIP, index);
+			ip = (UnsignedInt)(uintptr_t)GadgetComboBoxGetItemData(comboBoxLANIP, index);
 			TheWritableGlobalData->m_defaultIP = ip;
 			pref->setLANIPAddress(ip);
 		}
@@ -503,7 +503,7 @@ static void saveOptions()
 		GadgetComboBoxGetSelectedPos(comboBoxOnlineIP, &index);
 		if (index>=0)
 		{
-			ip = (UnsignedInt)GadgetComboBoxGetItemData(comboBoxOnlineIP, index);
+			ip = (UnsignedInt)(uintptr_t)GadgetComboBoxGetItemData(comboBoxOnlineIP, index);
 			pref->setOnlineIPAddress(ip);
 		}
 	}
@@ -1160,7 +1160,7 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 		count++;
 		str.translate(IPlist->getIPstring());
 		index = GadgetComboBoxAddEntry(comboBoxLANIP, str, color);
-		GadgetComboBoxSetItemData(comboBoxLANIP, index, (void *)(IPlist->getIP()));
+		GadgetComboBoxSetItemData(comboBoxLANIP, index, (void *)(intptr_t)(IPlist->getIP()));
 		if (selectedIP == IPlist->getIP())
 		{
 			selectedIndex = index;
@@ -1196,7 +1196,7 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 			count++;
 			str.translate(IPlist->getIPstring());
 			index = GadgetComboBoxAddEntry(comboBoxOnlineIP, str, color);
-			GadgetComboBoxSetItemData(comboBoxOnlineIP, index, (void *)(IPlist->getIP()));
+			GadgetComboBoxSetItemData(comboBoxOnlineIP, index, (void *)(intptr_t)(IPlist->getIP()));
 			if (selectedIP == IPlist->getIP())
 			{
 				selectedIndex = index;

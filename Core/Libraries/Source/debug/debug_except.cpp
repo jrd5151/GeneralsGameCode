@@ -110,7 +110,11 @@ void DebugExceptionhandler::LogExceptionLocation(Debug &dbg, struct _EXCEPTION_P
   struct _CONTEXT &ctx=*exptr->ContextRecord;
 
   char buf[512];
+#ifdef _WIN64
+  DebugStackwalk::Signature::GetSymbol(ctx.Rip,buf,sizeof(buf));
+#else
   DebugStackwalk::Signature::GetSymbol(ctx.Eip,buf,sizeof(buf));
+#endif
   dbg << "Exception occured at\n" << buf << ".";
 }
 
@@ -118,6 +122,28 @@ void DebugExceptionhandler::LogRegisters(Debug &dbg, struct _EXCEPTION_POINTERS 
 {
   struct _CONTEXT &ctx=*exptr->ContextRecord;
 
+#ifdef _WIN64
+  // TheSuperHackers @build Log the 64-bit registers
+  dbg << Debug::FillChar('0')
+      << Debug::Hex()
+      <<  "RAX:" << Debug::Width(16) << ctx.Rax
+      << " RBX:" << Debug::Width(16) << ctx.Rbx
+      << " RCX:" << Debug::Width(16) << ctx.Rcx << "\n"
+      <<  "RDX:" << Debug::Width(16) << ctx.Rdx
+      << " RSI:" << Debug::Width(16) << ctx.Rsi
+      << " RDI:" << Debug::Width(16) << ctx.Rdi << "\n"
+      <<  "R8: " << Debug::Width(16) << ctx.R8
+      << " R9: " << Debug::Width(16) << ctx.R9
+      << " R10:" << Debug::Width(16) << ctx.R10 << "\n"
+      <<  "R11:" << Debug::Width(16) << ctx.R11
+      << " R12:" << Debug::Width(16) << ctx.R12
+      << " R13:" << Debug::Width(16) << ctx.R13 << "\n"
+      <<  "R14:" << Debug::Width(16) << ctx.R14
+      << " R15:" << Debug::Width(16) << ctx.R15 << "\n"
+      <<  "RIP:" << Debug::Width(16) << ctx.Rip
+      << " RSP:" << Debug::Width(16) << ctx.Rsp
+      << " RBP:" << Debug::Width(16) << ctx.Rbp << "\n"
+#else
   dbg << Debug::FillChar('0')
       << Debug::Hex()
       <<  "EAX:" << Debug::Width(8) << ctx.Eax
@@ -129,6 +155,7 @@ void DebugExceptionhandler::LogRegisters(Debug &dbg, struct _EXCEPTION_POINTERS 
       <<  "EIP:" << Debug::Width(8) << ctx.Eip
       << " ESP:" << Debug::Width(8) << ctx.Esp
       << " EBP:" << Debug::Width(8) << ctx.Ebp << "\n"
+#endif
       <<  "Flags:" << Debug::Bin() << Debug::Width(32) << ctx.EFlags << Debug::Hex() << "\n"
       <<  "CS:" << Debug::Width(4) << ctx.SegCs
       << " DS:" << Debug::Width(4) << ctx.SegDs
@@ -148,7 +175,12 @@ void DebugExceptionhandler::LogFPURegisters(Debug &dbg, struct _EXCEPTION_POINTE
     return;
   }
 
+#ifdef _WIN64
+  // TheSuperHackers @build The x87 state is in the XMM save area on 64-bit
+  XMM_SAVE_AREA32 &flt=ctx.FltSave;
+#else
   FLOATING_SAVE_AREA &flt=ctx.FloatSave;
+#endif
   dbg << Debug::Bin() << Debug::FillChar('0')
       << "CW:" << Debug::Width(16) << (flt.ControlWord&0xffff) << "\n"
       << "SW:" << Debug::Width(16) << (flt.StatusWord&0xffff) << "\n"
@@ -158,25 +190,35 @@ void DebugExceptionhandler::LogFPURegisters(Debug &dbg, struct _EXCEPTION_POINTE
       << " ErrSel:  "    << Debug::Width(8) << flt.ErrorSelector << "\n"
       << "DataOfs:     " << Debug::Width(8) << flt.DataOffset
       << " DataSel: "    << Debug::Width(8) << flt.DataSelector << "\n"
-#if !defined(WOW64_SIZE_OF_80387_REGISTERS)
+#if !defined(WOW64_SIZE_OF_80387_REGISTERS) && !defined(_WIN64)
       << "Cr0NpxState: " << Debug::Width(8) << flt.Cr0NpxState << "\n"
 #endif
   ;
 
+#ifdef _WIN64
+  for (unsigned k=0;k<8;++k)
+#else
   for (unsigned k=0;k<SIZE_OF_80387_REGISTERS/10;++k)
+#endif
   {
     dbg << Debug::Dec() << "ST(" << k << ") ";
     dbg.SetPrefixAndRadix("",16);
 
+#ifdef _WIN64
+    BYTE *value=(BYTE *)&flt.FloatRegisters[k];
+#else
     BYTE *value=flt.RegisterArea+k*10;
+#endif
     for (unsigned i=0;i<10;i++)
       dbg << Debug::Width(2) << value[i];
 
     // TheSuperHackers @refactor Replaced MSVC inline assembly with portable C++ cast for MinGW compatibility
     // Convert from temporary real (10 byte) to double (8 bytes).
     // On x86, long double is the 10-byte x87 format, so we can just cast.
+#ifndef _WIN64
     double fpVal = (double)(*(long double*)value);
     dbg << " " << fpVal;
+#endif
 
     dbg << "\n";
   }
@@ -195,7 +237,12 @@ static char regInfo[1024],verInfo[256];
 // and this saves us from doing a stack walk twice
 static DebugStackwalk::Signature sig;
 
+// TheSuperHackers @build DLGPROC returns INT_PTR on 64-bit
+#ifdef _WIN64
+static INT_PTR CALLBACK ExceptionDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+#else
 static BOOL CALLBACK ExceptionDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+#endif
 {
   switch(uMsg)
   {
@@ -240,7 +287,11 @@ static BOOL CALLBACK ExceptionDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 
   // address
   struct _CONTEXT &ctx=*exPtrs->ContextRecord;
+#ifdef _WIN64
+  DebugStackwalk::Signature::GetSymbol(ctx.Rip,regInfo,sizeof(regInfo));
+#else
   DebugStackwalk::Signature::GetSymbol(ctx.Eip,regInfo,sizeof(regInfo));
+#endif
   SendDlgItemMessage(hWnd,102,WM_SETTEXT,0,(LPARAM)regInfo);
 
   // stack
@@ -396,7 +447,11 @@ LONG __stdcall DebugExceptionhandler::ExceptionFilter(struct _EXCEPTION_POINTERS
   dbg.m_stackWalk.StackWalk(sig,pExPtrs->ContextRecord);
   dbg << sig << "\n";
 
+#ifdef _WIN64
+  dbg << "Bytes around RIP:" << Debug::MemDump::Char(((char *)(pExPtrs->ContextRecord->Rip))-32,80);
+#else
   dbg << "Bytes around EIP:" << Debug::MemDump::Char(((char *)(pExPtrs->ContextRecord->Eip))-32,80);
+#endif
 
   dbg.FlushOutput();
 

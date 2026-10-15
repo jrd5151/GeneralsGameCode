@@ -156,6 +156,25 @@
             }
         },
         {
+            "name": "win64-vcpkg",
+            "inherits": "default-vcpkg",
+            "hidden": false,
+            "displayName": "Windows 64bit VCPKG Release",
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "cacheVariables": {
+                "RTS_FLAGS": "/W3",
+                "VCPKG_TARGET_TRIPLET": "x64-windows"
+            },
+            "vendor": {
+                "jetbrains.com/clion": {
+                    "toolchain": "Visual Studio"
+                }
+            }
+        },
+        {
             "name": "unix",
             "inherits": "default-vcpkg",
             "hidden": false,
@@ -267,6 +286,13 @@
             "configuration": "Debug"
         },
         {
+            "name": "win64-vcpkg",
+            "configurePreset": "win64-vcpkg",
+            "displayName": "Build Windows 64bit VCPKG Release",
+            "description": "Build Windows 64bit VCPKG Release",
+            "configuration": "Release"
+        },
+        {
             "name": "unix",
             "configurePreset": "unix",
             "displayName": "Build Unix 32bit VCPKG Release",
@@ -352,6 +378,14 @@
             "displayName": "Test Windows 32bit VCPKG Debug",
             "description": "Test Windows 32bit VCPKG Debug",
             "configuration": "Debug"
+        },
+        {
+            "name": "win64-vcpkg",
+            "inherits": "default",
+            "configurePreset": "win64-vcpkg",
+            "displayName": "Test Windows 64bit VCPKG Release",
+            "description": "Test Windows 64bit VCPKG Release",
+            "configuration": "Release"
         }
     ],
     "workflowPresets": [
@@ -495,6 +529,19 @@
                 {
                     "type": "build",
                     "name": "win32-vcpkg-debug"
+                }
+            ]
+        },
+        {
+            "name": "win64-vcpkg",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "win64-vcpkg"
+                },
+                {
+                    "type": "build",
+                    "name": "win64-vcpkg"
                 }
             ]
         },

@@ -121,10 +121,10 @@ jobs:
           "LIB=$MSVCDir\LIB;$MSVCDir\MFC\LIB;$env:LIB" >> $env:GITHUB_ENV
 
       - name: Set Up VC2022 Environment
-        if: startsWith(inputs.preset, 'win32')
+        if: startsWith(inputs.preset, 'win32') || startsWith(inputs.preset, 'win64')
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
         with:
-          arch: x86
+          arch: ${{ startsWith(inputs.preset, 'win64') && 'x64' || 'x86' }}
 
       - name: Setup vcpkg
         if: contains(inputs.preset, 'vcpkg')
@@ -187,9 +187,11 @@ jobs:
           $buildDir = "build\${{ inputs.preset }}"
           $artifactsDir = New-Item -ItemType Directory -Force -Path "$buildDir\${{ inputs.game }}\artifacts" -Verbose
 
-          if ("${{ inputs.preset }}" -like "win32*") {
+          if ("${{ inputs.preset }}" -like "win32*" -or "${{ inputs.preset }}" -like "win64*") {
             $configToUse = if ("${{ inputs.preset }}" -match "debug") { "Debug" } else { "Release" }
-            $files = Get-ChildItem -Path "$buildDir\Core\$configToUse","$buildDir\${{ inputs.game }}\$configToUse" -File |
+            # Core has no Release folder when neither tools nor extras are built.
+            $dirs = @("$buildDir\Core\$configToUse","$buildDir\${{ inputs.game }}\$configToUse") | Where-Object { Test-Path $_ }
+            $files = Get-ChildItem -Path $dirs -File |
               Where-Object { $_.Extension -in @(".exe", ".dll", ".pdb") } -Verbose
           } else {
             $files = Get-ChildItem -Path "$buildDir\Core","$buildDir\${{ inputs.game }}" -File |

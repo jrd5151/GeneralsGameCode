@@ -445,8 +445,10 @@ bool Debug::AssertDone()
           }
           break;
         case IDRETRY:
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && defined(_M_IX86)
           _asm int 0x03
+#elif defined(_MSC_VER)
+          __debugbreak(); // TheSuperHackers @build 64-bit MSVC has no inline assembly
 #elif defined(__GNUC__)
           __builtin_trap();
 #else
@@ -719,8 +721,10 @@ bool Debug::CrashDone(bool die)
             }
             break;
           case IDRETRY:
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && defined(_M_IX86)
             _asm int 0x03
+#elif defined(_MSC_VER)
+            __debugbreak(); // TheSuperHackers @build 64-bit MSVC has no inline assembly
 #elif defined(__GNUC__)
             __builtin_trap();
 #else

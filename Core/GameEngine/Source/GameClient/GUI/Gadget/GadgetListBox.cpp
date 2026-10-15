@@ -1791,8 +1791,9 @@ WindowMsgHandledType GadgetListBoxSystem( GameWindow *window, UnsignedInt msg,
 		case GLM_GET_SELECTION:
 		{
 
+			// TheSuperHackers @build A multi select list box hands out its selection array, so the caller passes room for a pointer.
 			if( list->multiSelect )
-				*(Int*)mData2 = (Int)list->selections;
+				*(Int**)mData2 = list->selections;
 			else
 				*(Int*)mData2 = list->selectPos;
 

@@ -41,20 +41,20 @@ DBGHELP(StackWalk,
 
 DBGHELP(SymFunctionTableAccess,
         LPVOID,
-        (HANDLE hProcess, DWORD AddrBase))
+        (HANDLE hProcess, DbgHelpAddr AddrBase))
 
 DBGHELP(SymGetModuleBase,
-        DWORD,
-        (HANDLE hProcess, DWORD dwAddr))
+        DbgHelpAddr,
+        (HANDLE hProcess, DbgHelpAddr dwAddr))
 
 DBGHELP(SymGetSymFromAddr,
         BOOL,
-        (HANDLE hProcess, DWORD Address, LPDWORD Displacement,
+        (HANDLE hProcess, DbgHelpAddr Address, DbgHelpSymDisp *Displacement,
         PIMAGEHLP_SYMBOL Symbol))
 
 DBGHELP(SymGetLineFromAddr,
         BOOL,
-        (HANDLE hProcess, DWORD dwAddr, PDWORD pdwDisplacement,
+        (HANDLE hProcess, DbgHelpAddr dwAddr, PDWORD pdwDisplacement,
         PIMAGEHLP_LINE Line))
 
 // keep this always as last entry

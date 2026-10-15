@@ -120,9 +120,9 @@ SimplePersistFactoryClass<T,CHUNKID>::Load(ChunkLoadClass & cload) const
 template<class T, int CHUNKID> void
 SimplePersistFactoryClass<T,CHUNKID>::Save(ChunkSaveClass & csave,PersistClass * obj) const
 {
-	uint32 objptr = (uint32)obj;
+	// TheSuperHackers @build The pointer is written at its full size, the size Load reads it back with.
 	csave.Begin_Chunk(SIMPLEFACTORY_CHUNKID_OBJPOINTER);
-	csave.Write(&objptr,sizeof(uint32));
+	csave.Write(&obj,sizeof(obj));
 	csave.End_Chunk();
 
 	csave.Begin_Chunk(SIMPLEFACTORY_CHUNKID_OBJDATA);

@@ -37,7 +37,7 @@
 //	Prototypes
 //*****************************************************************************
 BOOL InitSymbolInfo();
-void MakeStackTrace(DWORD myeip,DWORD myesp,DWORD myebp, int skipFrames, void (*callback)(const char*));
+void MakeStackTrace(uintptr_t myeip,uintptr_t myesp,uintptr_t myebp, int skipFrames, void (*callback)(const char*));
 void GetFunctionDetails(void *pointer, char*name, char*filename, unsigned int* linenumber, unsigned int* address);
 void WriteStackLine(void*address, void (*callback)(const char*));
 
@@ -45,6 +45,19 @@ void WriteStackLine(void*address, void (*callback)(const char*));
 //	Mis-named globals :-)
 //*****************************************************************************
 static CONTEXT gsContext;
+
+// TheSuperHackers @build StackWalk on 64-bit needs the AMD64 machine type and a context record
+#ifdef _WIN64
+#define STACKWALK_MACHINE IMAGE_FILE_MACHINE_AMD64
+#define STACKWALK_CONTEXT &gsContext
+#define STACKWALK_FUNCTION_TABLE_ACCESS reinterpret_cast<PFUNCTION_TABLE_ACCESS_ROUTINE>(DbgHelp::SymFunctionTableAccess)
+#define STACKWALK_GET_MODULE_BASE reinterpret_cast<PGET_MODULE_BASE_ROUTINE>(DbgHelp::SymGetModuleBase)
+#else
+#define STACKWALK_MACHINE IMAGE_FILE_MACHINE_I386
+#define STACKWALK_CONTEXT nullptr
+#define STACKWALK_FUNCTION_TABLE_ACCESS DbgHelp::SymFunctionTableAccess
+#define STACKWALK_GET_MODULE_BASE DbgHelp::SymGetModuleBase
+#endif
 
 
 //*****************************************************************************
@@ -67,9 +80,16 @@ void StackDump(void (*callback)(const char*))
 	if (!InitSymbolInfo())
 		return;
 
-	DWORD myeip,myesp,myebp;
+	uintptr_t myeip,myesp,myebp;
 
-#if defined(_MSC_VER)
+#if defined(_WIN64)
+	// TheSuperHackers @build Capture registers with RtlCaptureContext on 64-bit
+	CONTEXT context;
+	RtlCaptureContext(&context);
+	myeip = context.Rip;
+	myesp = context.Rsp;
+	myebp = context.Rbp;
+#elif defined(_MSC_VER)
 _asm
 {
 MYEIP1:
@@ -102,7 +122,7 @@ MYEIP1:
 
 //*****************************************************************************
 //*****************************************************************************
-void StackDumpFromContext(DWORD eip,DWORD esp,DWORD ebp, void (*callback)(const char*))
+void StackDumpFromContext(uintptr_t eip,uintptr_t esp,uintptr_t ebp, void (*callback)(const char*))
 {
 	if (callback == nullptr)
 	{
@@ -170,7 +190,7 @@ BOOL InitSymbolInfo()
 
 //*****************************************************************************
 //*****************************************************************************
-void MakeStackTrace(DWORD myeip,DWORD myesp,DWORD myebp, int skipFrames, void (*callback)(const char*))
+void MakeStackTrace(uintptr_t myeip,uintptr_t myesp,uintptr_t myebp, int skipFrames, void (*callback)(const char*))
 {
 STACKFRAME      stack_frame;
 BOOL            b_ret = TRUE;
@@ -188,6 +208,11 @@ stack_frame.AddrStack.Mode = AddrModeFlat;
 stack_frame.AddrStack.Offset = myesp;
 stack_frame.AddrFrame.Mode = AddrModeFlat;
 stack_frame.AddrFrame.Offset = myebp;
+#ifdef _WIN64
+gsContext.Rip = myeip;
+gsContext.Rsp = myesp;
+gsContext.Rbp = myebp;
+#endif
 {
 /*
     if(GetThreadContext(thread, &gsContext))
@@ -208,14 +233,14 @@ stack_frame.AddrFrame.Offset = myebp;
 			unsigned int skip = skipFrames;
 			while (b_ret&&skip)
 			{
-					b_ret = DbgHelp::StackWalk(      IMAGE_FILE_MACHINE_I386,
+					b_ret = DbgHelp::StackWalk(      STACKWALK_MACHINE,
 											process,
 											thread,
 											&stack_frame,
-											nullptr, //&gsContext,
+											STACKWALK_CONTEXT, //&gsContext,
 											nullptr,
-											DbgHelp::SymFunctionTableAccess,
-											DbgHelp::SymGetModuleBase,
+											STACKWALK_FUNCTION_TABLE_ACCESS,
+											STACKWALK_GET_MODULE_BASE,
 											nullptr);
 					skip--;
 			}
@@ -224,14 +249,14 @@ stack_frame.AddrFrame.Offset = myebp;
 			while(b_ret&&skip)
 			{
 
-					b_ret = DbgHelp::StackWalk(      IMAGE_FILE_MACHINE_I386,
+					b_ret = DbgHelp::StackWalk(      STACKWALK_MACHINE,
 											process,
 											thread,
 											&stack_frame,
-											nullptr, //&gsContext,
+											STACKWALK_CONTEXT, //&gsContext,
 											nullptr,
-											DbgHelp::SymFunctionTableAccess,
-											DbgHelp::SymGetModuleBase,
+											STACKWALK_FUNCTION_TABLE_ACCESS,
+											STACKWALK_GET_MODULE_BASE,
 											nullptr);
 
 
@@ -278,7 +303,7 @@ void GetFunctionDetails(void *pointer, char*name, char*filename, unsigned int* l
     psymbol->SizeOfStruct = sizeof(symbol_buffer);
     psymbol->MaxNameLength = 512;
 
-	if (DbgHelp::SymGetSymFromAddr(process, (DWORD) pointer, &displacement, psymbol))
+	if (DbgHelp::SymGetSymFromAddr(process, (uintptr_t) pointer, &displacement, psymbol))
 	{
 		if (name)
 		{
@@ -292,7 +317,7 @@ void GetFunctionDetails(void *pointer, char*name, char*filename, unsigned int* l
 		memset(&line,0,sizeof(line));
 		line.SizeOfStruct = sizeof(line);
 
-		if (DbgHelp::SymGetLineFromAddr(process, (DWORD) pointer, &displacement, &line))
+		if (DbgHelp::SymGetLineFromAddr(process, (uintptr_t) pointer, &displacement, &line))
 		{
 			if (filename)
 			{
@@ -328,8 +353,15 @@ void FillStackAddresses(void**addresses, unsigned int count, unsigned int skip)
     memset(&gsContext, 0, sizeof(CONTEXT));
     gsContext.ContextFlags = CONTEXT_FULL;
 
-	DWORD myeip,myesp,myebp;
-#if defined(_MSC_VER)
+	uintptr_t myeip,myesp,myebp;
+#if defined(_WIN64)
+	// TheSuperHackers @build Capture registers with RtlCaptureContext on 64-bit
+	CONTEXT context;
+	RtlCaptureContext(&context);
+	myeip = context.Rip;
+	myesp = context.Rsp;
+	myebp = context.Rbp;
+#elif defined(_MSC_VER)
 _asm
 {
 MYEIP2:
@@ -363,6 +395,11 @@ stack_frame.AddrStack.Mode = AddrModeFlat;
 stack_frame.AddrStack.Offset = myesp;
 stack_frame.AddrFrame.Mode = AddrModeFlat;
 stack_frame.AddrFrame.Offset = myebp;
+#ifdef _WIN64
+gsContext.Rip = myeip;
+gsContext.Rsp = myesp;
+gsContext.Rbp = myebp;
+#endif
 
 {
 /*
@@ -383,28 +420,28 @@ stack_frame.AddrFrame.Offset = myebp;
 		// Skip some?
 		while (stillgoing&&skip)
 		{
-			stillgoing = DbgHelp::StackWalk(IMAGE_FILE_MACHINE_I386,
+			stillgoing = DbgHelp::StackWalk(STACKWALK_MACHINE,
 								process,
 								thread,
 								&stack_frame,
-								nullptr,	//&gsContext,
+								STACKWALK_CONTEXT,	//&gsContext,
 								nullptr,
-								DbgHelp::SymFunctionTableAccess,
-								DbgHelp::SymGetModuleBase,
+								STACKWALK_FUNCTION_TABLE_ACCESS,
+								STACKWALK_GET_MODULE_BASE,
 								nullptr) != 0;
 			skip--;
 		}
 
 		while(stillgoing&&count)
 		{
-			stillgoing = DbgHelp::StackWalk(IMAGE_FILE_MACHINE_I386,
+			stillgoing = DbgHelp::StackWalk(STACKWALK_MACHINE,
 								process,
 								thread,
 								&stack_frame,
-								nullptr, //&gsContext,
+								STACKWALK_CONTEXT, //&gsContext,
 								nullptr,
-								DbgHelp::SymFunctionTableAccess,
-								DbgHelp::SymGetModuleBase,
+								STACKWALK_FUNCTION_TABLE_ACCESS,
+								STACKWALK_GET_MODULE_BASE,
 								nullptr) != 0;
 			if (stillgoing)
 			{
@@ -543,7 +580,7 @@ void DumpExceptionInfo( unsigned int u, EXCEPTION_POINTERS* e_info )
 	** The following are set for access violation only
 	*/
 	int access_read_write=-1;
-	unsigned long access_address = 0;
+	uintptr_t access_address = 0;
 	AsciiString msg;
 
 // DOUBLE_DEBUG does a DEBUG_LOG, and concats to g_LastErrorDump.  jba.
@@ -589,7 +626,11 @@ void DumpExceptionInfo( unsigned int u, EXCEPTION_POINTERS* e_info )
 	}
 
 	DOUBLE_DEBUG (("\nStack Dump:"));
+#ifdef _WIN64
+	StackDumpFromContext(context->Rip, context->Rsp, context->Rbp, nullptr);
+#else
 	StackDumpFromContext(context->Eip, context->Esp, context->Ebp, nullptr);
+#endif
 
 	DOUBLE_DEBUG (("\nDetails:"));
 
@@ -598,9 +639,16 @@ void DumpExceptionInfo( unsigned int u, EXCEPTION_POINTERS* e_info )
 	/*
 	** Dump the registers.
 	*/
+#ifdef _WIN64
+	// TheSuperHackers @build Dump the 64-bit registers
+	DOUBLE_DEBUG ( ( "Rip:%p\tRsp:%p\tRbp:%p", (void*)context->Rip, (void*)context->Rsp, (void*)context->Rbp));
+	DOUBLE_DEBUG ( ( "Rax:%p\tRbx:%p\tRcx:%p", (void*)context->Rax, (void*)context->Rbx, (void*)context->Rcx));
+	DOUBLE_DEBUG ( ( "Rdx:%p\tRsi:%p\tRdi:%p", (void*)context->Rdx, (void*)context->Rsi, (void*)context->Rdi));
+#else
 	DOUBLE_DEBUG ( ( "Eip:%08X\tEsp:%08X\tEbp:%08X", context->Eip, context->Esp, context->Ebp));
 	DOUBLE_DEBUG ( ( "Eax:%08X\tEbx:%08X\tEcx:%08X", context->Eax, context->Ebx, context->Ecx));
 	DOUBLE_DEBUG ( ( "Edx:%08X\tEsi:%08X\tEdi:%08X", context->Edx, context->Esi, context->Edi));
+#endif
 	DOUBLE_DEBUG ( ( "EFlags:%08X ", context->EFlags));
 	DOUBLE_DEBUG ( ( "CS:%04x  SS:%04x  DS:%04x  ES:%04x  FS:%04x  GS:%04x", context->SegCs, context->SegSs, context->SegDs, context->SegEs, context->SegFs, context->SegGs));
 
@@ -609,9 +657,15 @@ void DumpExceptionInfo( unsigned int u, EXCEPTION_POINTERS* e_info )
 	*/
 	char scrap[512];
 	DOUBLE_DEBUG ( ("EIP bytes dump..."));
+#ifdef _WIN64
+	sprintf (scrap, "\nBytes at CS:RIP (%p)  : ", (void*)context->Rip);
+
+	unsigned char *eip_ptr = (unsigned char *) (context->Rip);
+#else
 	wsprintf (scrap, "\nBytes at CS:EIP (%08X)  : ", context->Eip);
 
 	unsigned char *eip_ptr = (unsigned char *) (context->Eip);
+#endif
 	char bytestr[32];
 
 	for (int c = 0 ; c < 32 ; c++)

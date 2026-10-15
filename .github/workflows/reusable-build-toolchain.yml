@@ -206,6 +206,19 @@ jobs:
             Copy-Item -Path "$gameDataDir\*" -Destination $artifactsDir -Recurse -Force -Verbose
           }
 
+          # The 64-bit game draws through the built in d3d8to9, which needs d3dx9_43.dll to translate shaders.
+          # Microsoft publishes it for redistribution as the Microsoft.DXSDK.D3DX NuGet package.
+          if ("${{ inputs.preset }}" -like "win64*") {
+            Copy-Item -Path "Dependencies\d3d8to9\LICENSE.md" -Destination "$artifactsDir\d3d8to9-LICENSE.md" -Verbose
+            $d3dxDir = "$buildDir\d3dx"
+            Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.DXSDK.D3DX/9.29.952.8" -OutFile "$buildDir\d3dx.zip"
+            Expand-Archive -Path "$buildDir\d3dx.zip" -DestinationPath $d3dxDir -Force
+            $d3dx = Get-ChildItem -Path $d3dxDir -Recurse -File -Filter "d3dx9_43.dll" | Where-Object { $_.FullName -match "\\x64\\" } | Select-Object -First 1
+            if (-not $d3dx) { throw "d3dx9_43.dll for x64 not found in the D3DX package" }
+            Copy-Item -Path $d3dx.FullName -Destination "$artifactsDir\d3dx9_43.dll" -Verbose
+            Get-ChildItem -Path $d3dxDir -File -Filter "LICENSE*" | Copy-Item -Destination { "$artifactsDir\d3dx9-$($_.Name)" } -Verbose
+          }
+
       - name: Upload ${{ inputs.game }} ${{ inputs.preset }}${{ inputs.tools && '+t' || '' }}${{ inputs.extras && '+e' || '' }} Artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:

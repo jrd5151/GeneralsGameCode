@@ -183,6 +183,13 @@ typedef IDirect3D8* (WINAPI *Direct3DCreate8Type) (UINT SDKVersion);
 Direct3DCreate8Type	Direct3DCreate8Ptr = nullptr;
 HINSTANCE D3D8Lib = nullptr;
 
+#ifdef RTS_HAS_D3D8TO9
+// TheSuperHackers @build Direct3D 8 on top of Direct3D 9, linked in from Dependencies/d3d8to9. Windows has no
+// 64-bit D3D8.DLL, so the 64-bit game uses this when D3D8.DLL does not load. A D3D8.DLL next to the game, such
+// as DXVK's, still takes priority.
+extern "C" IDirect3D8* WINAPI D3D8to9_Direct3DCreate8(UINT SDKVersion);
+#endif
+
 DX8_CleanupHook	 *DX8Wrapper::m_pCleanupHook=nullptr;
 #ifdef EXTENDED_STATS
 DX8_Stats	 DX8Wrapper::stats;
@@ -294,13 +301,23 @@ bool DX8Wrapper::Init(void * hwnd, bool lite)
 	if (!lite) {
 		D3D8Lib = LoadLibrary("D3D8.DLL");
 
-		if (D3D8Lib == nullptr) return false;	// Return false at this point if init failed
-
-		Direct3DCreate8Ptr = (Direct3DCreate8Type) GetProcAddress(D3D8Lib, "Direct3DCreate8");
-		if (Direct3DCreate8Ptr == nullptr)
+		if (D3D8Lib != nullptr)
 		{
-			Shutdown();
-			return false;
+			Direct3DCreate8Ptr = (Direct3DCreate8Type) GetProcAddress(D3D8Lib, "Direct3DCreate8");
+			if (Direct3DCreate8Ptr == nullptr)
+			{
+				Shutdown();
+				return false;
+			}
+		}
+		else
+		{
+#ifdef RTS_HAS_D3D8TO9
+			WWDEBUG_SAY(("D3D8.DLL did not load, using the built in Direct3D 8 on Direct3D 9"));
+			Direct3DCreate8Ptr = D3D8to9_Direct3DCreate8;
+#else
+			return false;	// Return false at this point if init failed
+#endif
 		}
 
 		/*

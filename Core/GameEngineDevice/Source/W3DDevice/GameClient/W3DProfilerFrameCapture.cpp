@@ -27,7 +27,6 @@
 #include "WW3D2/ww3dformat.h"
 #include "WWMath/wwmath.h"
 #include <cstring>
-#include <d3dx8core.h>
 
 W3DProfilerFrameCapture::W3DProfilerFrameCapture()
 {
@@ -66,23 +65,26 @@ void W3DProfilerFrameCapture::Capture(UnsignedInt displayWidth, UnsignedInt disp
 	// TheSuperHackers @todo In DX9 with ps2.0 this shader will be much simpler
 	if (!m_swizzleShader)
 	{
-		ID3DXBuffer *compiledShader = nullptr;
-		const char *shader =
-			"ps.1.4\n"
-			"texld r0, t0\n"
-			"mov r1.a, r0.r\n"
-			"mov r2.a, r0.g\n"
-			"mov r3.a, r0.b\n"
-			"mul r0.rgb, r3.a, c0\n"
-			"mad r0.rgb, r2.a, c1, r0\n"
-			"mad r0.rgb, r1.a, c2, r0\n";
-
-		HRESULT hr = D3DXAssembleShader(shader, strlen(shader), 0, nullptr, &compiledShader, nullptr);
-		if (FAILED(hr))
-			return;
-
-		hr = DX8Wrapper::_Get_D3D_Device8()->CreatePixelShader((DWORD *)compiledShader->GetBufferPointer(), &m_swizzleShader);
-		compiledShader->Release();
+		// TheSuperHackers @build Stored assembled, as D3DXAssembleShader produced it from this source:
+		// ps.1.4
+		// texld r0, t0
+		// mov r1.a, r0.r
+		// mov r2.a, r0.g
+		// mov r3.a, r0.b
+		// mul r0.rgb, r3.a, c0
+		// mad r0.rgb, r2.a, c1, r0
+		// mad r0.rgb, r1.a, c2, r0
+		static const DWORD swizzleShader[] =
+		{
+			0xffff0104, 0x0009fffe, 0x58443344, 0x68532038, 0x72656461, 0x73734120,
+			0x6c626d65, 0x56207265, 0x69737265, 0x30206e6f, 0x0031392e, 0x00000042,
+			0x800f0000, 0xb0e40000, 0x00000001, 0x80080001, 0x80000000, 0x00000001,
+			0x80080002, 0x80550000, 0x00000001, 0x80080003, 0x80aa0000, 0x00000005,
+			0x80070000, 0x80ff0003, 0xa0e40000, 0x00000004, 0x80070000, 0x80ff0002,
+			0xa0e40001, 0x80e40000, 0x00000004, 0x80070000, 0x80ff0001, 0xa0e40002,
+			0x80e40000, 0x0000ffff
+		};
+		HRESULT hr = DX8Wrapper::_Get_D3D_Device8()->CreatePixelShader(swizzleShader, &m_swizzleShader);
 
 		if (FAILED(hr))
 			return;

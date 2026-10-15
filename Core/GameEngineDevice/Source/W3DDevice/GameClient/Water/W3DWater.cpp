@@ -45,7 +45,7 @@
 #include "WW3D2/dx8wrapper.h"
 #include "WW3D2/Renderer.h"
 #include "WW3D2/light.h"
-#include "d3dx8math.h"
+#include "WWMath/d3dxmath.h"
 #include "WWLib/simplevec.h"
 #include "WW3D2/mesh.h"
 #include "WW3D2/matinfo.h"
@@ -920,53 +920,68 @@ void WaterRenderObjClass::ReAcquireResources()
 
 	if (W3DShaderManager::getChipset() >= DC_GENERIC_PIXEL_SHADER_1_1)
 	{
-		ID3DXBuffer *compiledShader;
-		const char *shader =
-			"ps.1.1\n \
-			tex t0 \n\
-			tex t1	\n\
-			tex t2	\n\
-			tex t3\n\
-			mul r0.rgb, v0, t0 ; blend vertex color into t0. \n\
-			mov r0.a, t0 ; keep vertex alpha from fading the base water. \n\
-			mul r1, t1, t2 ; mul\n\
-			add r1.rgb, r1, t3\n\
-			mul r1.rgb, r1, v0.a\n\
-			+mul r0.a, r0, t3\n\
-			add r0.rgb, r0, r1\n";
-		hr = D3DXAssembleShader( shader, strlen(shader), 0, nullptr, &compiledShader, nullptr);
-		if (hr==0) {
-			hr = 	DX8Wrapper::_Get_D3D_Device8()->CreatePixelShader((DWORD*)compiledShader->GetBufferPointer(), &m_riverWaterPixelShader);
-			compiledShader->Release();
-		}
-		shader =
-			"ps.1.1\n \
-			tex t0 \n\
-			tex t1	\n\
-			texbem t2, t1 ; use t1 as env map adjustment on t2.\n\
-			mul r0,v0,t0 ; blend vertex color into t0. \n\
-			mul r1.rgb,t2,c0 ; reduce t2 (environment mapped reflection) by constant\n\
-			add r0.rgb, r0, r1";
-		hr = D3DXAssembleShader( shader, strlen(shader), 0, nullptr, &compiledShader, nullptr);
-		if (hr==0) {
-			hr = 	DX8Wrapper::_Get_D3D_Device8()->CreatePixelShader((DWORD*)compiledShader->GetBufferPointer(), &m_waterPixelShader);
-			compiledShader->Release();
-		}
-		shader =
-			"ps.1.1\n \
-			tex t0 ;get water texture\n\
-			tex t1 ;get white highlights on black background\n\
-			tex t2 ;get white highlights with more tiling\n\
-			tex t3	; get black shroud \n\
-			mul r0,v0,t0 ; blend vertex color and alpha into base texture. \n\
-			mad r0.rgb, t1, t2, r0	; blend sparkles and noise \n\
-			mul r0.rgb, r0, t3 ; blend in black shroud \n\
-			;\n";
-		hr = D3DXAssembleShader( shader, strlen(shader), 0, nullptr, &compiledShader, nullptr);
-		if (hr==0) {
-			hr = 	DX8Wrapper::_Get_D3D_Device8()->CreatePixelShader((DWORD*)compiledShader->GetBufferPointer(), &m_trapezoidWaterPixelShader);
-			compiledShader->Release();
-		}
+		// TheSuperHackers @build The pixel shaders are stored assembled, as D3DXAssembleShader produced them
+		// from the source in the comments, so the game does not need D3DX8.
+		// ps.1.1
+		// tex t0
+		// tex t1
+		// tex t2
+		// tex t3
+		// mul r0.rgb, v0, t0 ; blend vertex color into t0.
+		// mov r0.a, t0 ; keep vertex alpha from fading the base water.
+		// mul r1, t1, t2 ; mul
+		// add r1.rgb, r1, t3
+		// mul r1.rgb, r1, v0.a
+		// +mul r0.a, r0, t3
+		// add r0.rgb, r0, r1
+		static const DWORD riverWaterShader[] =
+		{
+			0xffff0101, 0x0009fffe, 0x58443344, 0x68532038, 0x72656461, 0x73734120,
+			0x6c626d65, 0x56207265, 0x69737265, 0x30206e6f, 0x0031392e, 0x00000042,
+			0xb00f0000, 0x00000042, 0xb00f0001, 0x00000042, 0xb00f0002, 0x00000042,
+			0xb00f0003, 0x00000005, 0x80070000, 0x90e40000, 0xb0e40000, 0x00000001,
+			0x80080000, 0xb0e40000, 0x00000005, 0x800f0001, 0xb0e40001, 0xb0e40002,
+			0x00000002, 0x80070001, 0x80e40001, 0xb0e40003, 0x00000005, 0x80070001,
+			0x80e40001, 0x90ff0000, 0x40000005, 0x80080000, 0x80e40000, 0xb0e40003,
+			0x00000002, 0x80070000, 0x80e40000, 0x80e40001, 0x0000ffff
+		};
+		hr = DX8Wrapper::_Get_D3D_Device8()->CreatePixelShader(riverWaterShader, &m_riverWaterPixelShader);
+		// ps.1.1
+		// tex t0
+		// tex t1
+		// texbem t2, t1 ; use t1 as env map adjustment on t2.
+		// mul r0,v0,t0 ; blend vertex color into t0.
+		// mul r1.rgb,t2,c0 ; reduce t2 (environment mapped reflection) by constant
+		// add r0.rgb, r0, r1
+		static const DWORD waterShader[] =
+		{
+			0xffff0101, 0x0009fffe, 0x58443344, 0x68532038, 0x72656461, 0x73734120,
+			0x6c626d65, 0x56207265, 0x69737265, 0x30206e6f, 0x0031392e, 0x00000042,
+			0xb00f0000, 0x00000042, 0xb00f0001, 0x00000043, 0xb00f0002, 0xb0e40001,
+			0x00000005, 0x800f0000, 0x90e40000, 0xb0e40000, 0x00000005, 0x80070001,
+			0xb0e40002, 0xa0e40000, 0x00000002, 0x80070000, 0x80e40000, 0x80e40001,
+			0x0000ffff
+		};
+		hr = DX8Wrapper::_Get_D3D_Device8()->CreatePixelShader(waterShader, &m_waterPixelShader);
+		// ps.1.1
+		// tex t0 ;get water texture
+		// tex t1 ;get white highlights on black background
+		// tex t2 ;get white highlights with more tiling
+		// tex t3	; get black shroud
+		// mul r0,v0,t0 ; blend vertex color and alpha into base texture.
+		// mad r0.rgb, t1, t2, r0	; blend sparkles and noise
+		// mul r0.rgb, r0, t3 ; blend in black shroud
+		// ;
+		static const DWORD trapezoidWaterShader[] =
+		{
+			0xffff0101, 0x0009fffe, 0x58443344, 0x68532038, 0x72656461, 0x73734120,
+			0x6c626d65, 0x56207265, 0x69737265, 0x30206e6f, 0x0031392e, 0x00000042,
+			0xb00f0000, 0x00000042, 0xb00f0001, 0x00000042, 0xb00f0002, 0x00000042,
+			0xb00f0003, 0x00000005, 0x800f0000, 0x90e40000, 0xb0e40000, 0x00000004,
+			0x80070000, 0xb0e40001, 0xb0e40002, 0x80e40000, 0x00000005, 0x80070000,
+			0x80e40000, 0xb0e40003, 0x0000ffff
+		};
+		hr = DX8Wrapper::_Get_D3D_Device8()->CreatePixelShader(trapezoidWaterShader, &m_trapezoidWaterPixelShader);
 	}
 
 	//W3D Invalidate textures after losing the device and since we peek at the textures directly, it won't

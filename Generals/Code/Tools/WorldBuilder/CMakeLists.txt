@@ -211,6 +211,7 @@ target_precompile_headers(g_worldbuilder PRIVATE
 )
 
 target_link_libraries(g_worldbuilder PRIVATE
+    d3dx8 # TheSuperHackers @build WorldBuilder still uses D3DXCreateFont
     g_gameenginedevice
     gi_always
     imm32

@@ -45,7 +45,7 @@
 #include "dx8caps.h"
 #include "WWLib/thread.h"
 #include "WWDebug/wwmemlog.h"
-#include <d3dx8core.h>
+#include "WW3D2/d3dxtex.h"
 
 #define DEFAULT_VB_SIZE 5000
 

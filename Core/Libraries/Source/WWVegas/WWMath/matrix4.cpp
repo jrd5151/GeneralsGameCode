@@ -45,7 +45,7 @@
 
 #include "WWLib/win.h"
 #include <d3d8types.h>
-#include <d3dx8math.h>
+#include "WWMath/d3dxmath.h"
 
 /***********************************************************************************************
  * Matrix4x4::Multiply -- Multiply two Matrix4x4's together                                        *

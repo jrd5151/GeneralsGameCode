@@ -20,7 +20,7 @@
 #include "missingtexture.h"
 #include "texture.h"
 #include "dx8wrapper.h"
-#include <d3dx8core.h>
+#include "WW3D2/d3dxtex.h"
 
 static unsigned missing_image_width=128;
 static unsigned missing_image_height=128;

@@ -30,6 +30,7 @@ set(WWMATH_SRC
     culltype.h
     curve.cpp
     curve.h
+    d3dxmath.h
     euler.cpp
     euler.h
     frustum.cpp

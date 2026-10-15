@@ -358,10 +358,10 @@ void DX8Wrapper::Shutdown()
 		}
 	}
 
-	if (D3D8Lib) {
-		FreeLibrary(D3D8Lib);
-		D3D8Lib = nullptr;
-	}
+	// TheSuperHackers @bugfix D3D8.DLL stays loaded until the process ends. Textures that other subsystems
+	// still hold are released after this shutdown, and they crash if the DLL is gone by then. The game used
+	// to import D3D8.DLL through d3dx8, which kept it loaded; this LoadLibrary is now its only reference.
+	D3D8Lib = nullptr;
 
 	_RenderDeviceNameTable.Clear();		 // note - Delete_All() resizes the vector, causing a reallocation.  Clear is better. jba.
 	_RenderDeviceShortNameTable.Clear();

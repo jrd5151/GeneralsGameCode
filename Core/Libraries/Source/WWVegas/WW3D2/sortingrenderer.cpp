@@ -45,7 +45,7 @@
 #include "vertmaterial.h"
 #include "texture.h"
 #include "d3d8.h"
-#include "d3dx8math.h"
+#include "WWMath/d3dxmath.h"
 #include "statistics.h"
 #include <WWDebug/wwprofile.h>
 #include <algorithm>

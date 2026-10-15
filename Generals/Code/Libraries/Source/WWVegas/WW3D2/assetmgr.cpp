@@ -111,7 +111,7 @@
 #include "w3dexclusionlist.h"
 #include <WWLib/INI.h>
 #include <windows.h>
-#include <d3dx8core.h>
+#include "WW3D2/d3dxtex.h"
 #include "WWDebug/wwprofile.h"
 #include "assetstatus.h"
 #include "ringobj.h"

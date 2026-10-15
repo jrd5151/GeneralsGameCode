@@ -216,6 +216,7 @@ target_precompile_headers(z_worldbuilder PRIVATE
 )
 
 target_link_libraries(z_worldbuilder PRIVATE
+    d3dx8 # TheSuperHackers @build WorldBuilder still uses D3DXCreateFont
     imm32
     vfw32
     winmm

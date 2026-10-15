@@ -42,7 +42,7 @@
 #include "texture.h"
 
 #include <d3d8.h>
-#include <d3dx8core.h>
+#include "WW3D2/d3dxtex.h"
 #include "dx8wrapper.h"
 #include "WWLib/TARGA.h"
 #include <WWLib/nstrdup.h>

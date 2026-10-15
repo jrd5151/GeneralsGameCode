@@ -202,7 +202,13 @@ static Bool theMainInitFlag = false;
 // ----------------------------------------------------------------------------
 
 /// @todo srj -- make this work for 8
+// TheSuperHackers @build 64-bit blocks are rounded to 8 bytes, so pointers and doubles in them stay aligned.
+#ifdef _WIN64
+#define MEM_BOUND_ALIGNMENT 8
+#else
 #define MEM_BOUND_ALIGNMENT 4
+#endif
+#define MEM_ALLOCATION_COUNT_MULTIPLE 4
 
 static Int roundUpMemBound(Int i);
 static void *sysAllocateDoNotZero(Int numBytes);
@@ -1527,7 +1533,7 @@ void MemoryPool::init(MemoryPoolFactory *factory, const char *poolName, Int allo
 {
 	m_factory = factory;
 	m_poolName = poolName;
-	m_allocationSize = ::roundUpMemBound(allocationSize);	// round up to four-byte boundary
+	m_allocationSize = ::roundUpMemBound(allocationSize);	// round up to the alignment boundary
 	m_initialAllocationCount = initialAllocationCount;
 	m_overflowAllocationCount = overflowAllocationCount;
 	m_usedBlocksInPool = 0;
@@ -1563,7 +1569,7 @@ MemoryPool::~MemoryPool()
 */
 MemoryPoolBlob* MemoryPool::createBlob(Int allocationCount)
 {
-	DEBUG_ASSERTCRASH(allocationCount > 0 && allocationCount%MEM_BOUND_ALIGNMENT==0, ("bad allocationCount (must be >0 and evenly divisible by %d)",MEM_BOUND_ALIGNMENT));
+	DEBUG_ASSERTCRASH(allocationCount > 0 && allocationCount%MEM_ALLOCATION_COUNT_MULTIPLE==0, ("bad allocationCount (must be >0 and evenly divisible by %d)",MEM_ALLOCATION_COUNT_MULTIPLE));
 
 	MemoryPoolBlob* blob = new (::sysAllocateDoNotZero(sizeof(MemoryPoolBlob))) MemoryPoolBlob;	// will throw on failure
 

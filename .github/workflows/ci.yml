@@ -166,6 +166,11 @@ jobs:
           - preset: "win32-vcpkg-debug"
             tools: true
             extras: true
+          # The 64-bit build is the game only, because the tools stay 32-bit.
+          - preset: "win64-vcpkg"
+            tools: false
+            extras: false
+            ffmpeg: true
       fail-fast: false
     uses: ./.github/workflows/reusable-build-toolchain.yml
     with:

@@ -3045,12 +3045,7 @@ void AILCALLBACK setStreamCompleted( HSTREAM streamCompleted )
 //-------------------------------------------------------------------------------------------------
 U32 AILCALLBACK streamingFileOpen(char const *fileName, void **file_handle)
 {
-#if defined(RTS_DEBUG)
-	if (sizeof(U32) != sizeof(File*)) {
-		RELEASE_CRASH(("streamingFileOpen - This function requires work in order to compile on non 32-bit platforms."));
-	}
-#endif
-
+	// TheSuperHackers @bugfix Removed a 32-bit only check. The handle is passed as void*, which works on 64-bit.
 	(*file_handle) = (void *) TheFileSystem->openFile(fileName, File::READ | File::STREAMING);
 	return ((*file_handle) != nullptr);
 }

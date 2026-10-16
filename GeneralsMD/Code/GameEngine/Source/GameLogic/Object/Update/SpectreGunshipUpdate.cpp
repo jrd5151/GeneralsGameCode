@@ -886,11 +886,15 @@ void SpectreGunshipUpdate::xfer( Xfer *xfer )
 
 	if( version < 2 )
 	{
-		xfer->xferUser( &m_attackAreaDecal, sizeof( RadiusDecal ) );
-		xfer->xferUser( &m_targetingReticleDecal, sizeof( RadiusDecal ) );
+		// TheSuperHackers @bugfix Old saves stored each RadiusDecal as its raw 32-bit memory: two pointers and a Bool,
+		// 12 bytes. Those pointers mean nothing after loading, so skip the bytes instead of copying them into the live
+		// decals. Reading sizeof(RadiusDecal) would also read 24 bytes per decal in a 64-bit build.
+		Byte legacyDecal[ 12 ];
+		xfer->xferUser( legacyDecal, sizeof( legacyDecal ) );
+		xfer->xferUser( legacyDecal, sizeof( legacyDecal ) );
 
 #if defined TRACKERS
-		xfer->xferUser( &m_howitzerTrackerDecal, sizeof( RadiusDecal ) );
+		xfer->xferUser( legacyDecal, sizeof( legacyDecal ) );
 #endif
 	}
 

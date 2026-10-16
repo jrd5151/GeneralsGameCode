@@ -215,7 +215,9 @@ void BitFlags<NUMBITS, TAG>::xfer(Xfer* xfer)
 
 		// just call the xfer implementation on the data values
 #if RETAIL_COMPATIBLE_CRC
-		xfer->xferUser( this, sizeof( this ) );
+		// TheSuperHackers @bugfix The retail game used sizeof(this), which is 4 bytes in a 32-bit build.
+		// It is spelled out here so that 64-bit builds hash the same 4 bytes instead of 8.
+		xfer->xferUser( this, 4 );
 #else
 		xfer->xferUser( this, sizeof( *this ) );
 #endif

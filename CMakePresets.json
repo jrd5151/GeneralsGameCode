@@ -165,7 +165,7 @@
                 "strategy": "external"
             },
             "cacheVariables": {
-                "RTS_FLAGS": "/W3",
+                "RTS_FLAGS": "/W3;/w14311;/w14312;/w14302",
                 "VCPKG_TARGET_TRIPLET": "x64-windows"
             },
             "vendor": {

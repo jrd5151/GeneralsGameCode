@@ -212,7 +212,13 @@ void setFPMode()
 	//newVal = (newVal & ~_MCW_RC) | (_RC_CHOP & _MCW_RC);
 	newVal = (newVal & ~_MCW_PC) | (_PC_24   & _MCW_PC);
 
+#ifdef _WIN64
+	// TheSuperHackers @build 64-bit code does its float math with SSE, which has no precision control.
+	// Passing _MCW_PC there is an invalid parameter and ends the program.
+	_controlfp(newVal, _MCW_RC);
+#else
 	_controlfp(newVal, _MCW_PC | _MCW_RC);
+#endif
 }
 
 // ------------------------------------------------------------------------------------------------

@@ -16,6 +16,11 @@ add_subdirectory(Utility)
 add_subdirectory(Bink)
 add_subdirectory(Miles)
 
+if (WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+    # Windows has no 64-bit d3d8.dll, so 64-bit builds bring their own Direct3D 8 on top of Direct3D 9.
+    add_subdirectory(d3d8to9)
+endif()
+
 if (WIN32)
     add_subdirectory(DbgHelp)
     add_subdirectory(Usp10)

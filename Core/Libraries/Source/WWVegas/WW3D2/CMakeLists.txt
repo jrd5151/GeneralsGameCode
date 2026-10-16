@@ -251,6 +251,11 @@ if (MSVC AND NOT IS_VS6_BUILD)
     )
 endif()
 
+if (TARGET deps_d3d8to9)
+    target_link_libraries(corei_ww3d2 INTERFACE deps_d3d8to9)
+    target_compile_definitions(corei_ww3d2 INTERFACE RTS_HAS_D3D8TO9)
+endif()
+
 target_link_libraries(corei_ww3d2 INTERFACE
     core_browserengine
     core_wwlib

@@ -38,6 +38,8 @@ private:
 
 	static Bool saveStartupWorkingDirectory();
 	static Bool setWorkingDirectory(const char *path);
+	// Returns true if the directory, which ends with a backslash, holds the game's data archives.
+	static Bool hasGameData(const char *directory);
 
 	static Bool s_hasSetWorkingDirectory;
 	static Char s_startupWorkingDirectory[];

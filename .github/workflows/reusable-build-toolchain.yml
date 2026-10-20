@@ -198,7 +198,14 @@ jobs:
               Where-Object { $_.Extension -in @(".exe", ".dll", ".pdb") } -Verbose
           }
 
-          $files | Move-Item -Destination $artifactsDir -Verbose -Force
+          # The 64-bit build goes into an x64 folder, so the zip can be extracted straight into the game folder
+          # next to the 32-bit game. It finds the game data in the folder above it.
+          $binDir = $artifactsDir
+          if ("${{ inputs.preset }}" -like "win64*") {
+            $binDir = New-Item -ItemType Directory -Force -Path "$artifactsDir\x64" -Verbose
+          }
+
+          $files | Move-Item -Destination $binDir -Verbose -Force
 
           # Game data files that the fork adds, such as new window layouts, go next to the executable.
           $gameDataDir = "${{ inputs.game }}\GameData"
@@ -209,14 +216,14 @@ jobs:
           # The 64-bit game draws through the built in d3d8to9, which needs d3dx9_43.dll to translate shaders.
           # Microsoft publishes it for redistribution as the Microsoft.DXSDK.D3DX NuGet package.
           if ("${{ inputs.preset }}" -like "win64*") {
-            Copy-Item -Path "Dependencies\d3d8to9\LICENSE.md" -Destination "$artifactsDir\d3d8to9-LICENSE.md" -Verbose
+            Copy-Item -Path "Dependencies\d3d8to9\LICENSE.md" -Destination "$binDir\d3d8to9-LICENSE.md" -Verbose
             $d3dxDir = "$buildDir\d3dx"
             Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.DXSDK.D3DX/9.29.952.8" -OutFile "$buildDir\d3dx.zip"
             Expand-Archive -Path "$buildDir\d3dx.zip" -DestinationPath $d3dxDir -Force
             $d3dx = Get-ChildItem -Path $d3dxDir -Recurse -File -Filter "d3dx9_43.dll" | Where-Object { $_.FullName -match "\\x64\\" } | Select-Object -First 1
             if (-not $d3dx) { throw "d3dx9_43.dll for x64 not found in the D3DX package" }
-            Copy-Item -Path $d3dx.FullName -Destination "$artifactsDir\d3dx9_43.dll" -Verbose
-            Get-ChildItem -Path $d3dxDir -File -Filter "LICENSE*" | Copy-Item -Destination { "$artifactsDir\d3dx9-$($_.Name)" } -Verbose
+            Copy-Item -Path $d3dx.FullName -Destination "$binDir\d3dx9_43.dll" -Verbose
+            Get-ChildItem -Path $d3dxDir -File -Filter "LICENSE*" | Copy-Item -Destination { "$binDir\d3dx9-$($_.Name)" } -Verbose
           }
 
       - name: Upload ${{ inputs.game }} ${{ inputs.preset }}${{ inputs.tools && '+t' || '' }}${{ inputs.extras && '+e' || '' }} Artifact

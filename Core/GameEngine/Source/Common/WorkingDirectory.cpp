@@ -100,7 +100,42 @@ Bool WorkingDirectory::setExecutableWorkingDirectory()
 	// Removing the backslash leaves "C:", which refers to that drive's current directory.
 	pEnd[1] = '\0';
 
+	// TheSuperHackers @feature A build kept in a subfolder of the game folder, such as the 64-bit build in x64,
+	// runs on the game data of the folder above it when its own folder has none.
+	if (!hasGameData(buffer))
+	{
+		Char parent[_MAX_PATH];
+		strlcpy(parent, buffer, ARRAY_SIZE(parent));
+		const size_t parentLen = strlen(parent);
+		if (parentLen >= 2)
+		{
+			parent[parentLen - 1] = '\0'; // drop the trailing backslash
+			Char *pParentEnd = strrchr(parent, '\\');
+			if (pParentEnd != nullptr)
+			{
+				pParentEnd[1] = '\0';
+				if (hasGameData(parent))
+					return setWorkingDirectory(parent);
+			}
+		}
+	}
+
 	return setWorkingDirectory(buffer);
+}
+
+Bool WorkingDirectory::hasGameData(const char *directory)
+{
+	// One of the archives every install has, Zero Hour first.
+	static const char *const dataFiles[] = { "INIZH.big", "INI.big" };
+
+	for (size_t i = 0; i < ARRAY_SIZE(dataFiles); ++i)
+	{
+		Char path[_MAX_PATH];
+		snprintf(path, ARRAY_SIZE(path), "%s%s", directory, dataFiles[i]);
+		if (::GetFileAttributes(path) != 0xFFFFFFFF) // INVALID_FILE_ATTRIBUTES, which VC6 does not define
+			return TRUE;
+	}
+	return FALSE;
 }
 
 Bool WorkingDirectory::setCustomWorkingDirectory(const char *path)

@@ -132,7 +132,7 @@ Bool WorkingDirectory::hasGameData(const char *directory)
 	{
 		Char path[_MAX_PATH];
 		snprintf(path, ARRAY_SIZE(path), "%s%s", directory, dataFiles[i]);
-		if (::GetFileAttributes(path) != INVALID_FILE_ATTRIBUTES)
+		if (::GetFileAttributes(path) != 0xFFFFFFFF) // INVALID_FILE_ATTRIBUTES, which VC6 does not define
 			return TRUE;
 	}
 	return FALSE;
